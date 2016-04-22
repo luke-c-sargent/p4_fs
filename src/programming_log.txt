@@ -1,0 +1,137 @@
+3/6, 6:00p - 10:00p Brittany, Luke,  4 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+
+3/7, 2:15p - 5:15p Brittany, Luke,  3 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+
+3/8, 12:30a - 3:00p Brittany, Luke,  2.5 hours
+Driver Order and Time Length:
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 45 minutes
+Brittany, 15 minutes
+
+3/10, 12:00p - 4:15p Brittany, Luke,  4.25 hours
+Driver Order and Time Length:
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 45 minutes
+
+3/11, 10:00a - 12:00p Brittany  2 hours
+Driver Order and Time Length:
+Brittany, 120 minutes
+
+3/21, 2:00p - 7:00p Brittany, Luke,  5 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minute
+
+3/23, 1:30p - 6:00p Brittany, Luke,  4.5 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+
+3/24, 10:00a - 2:00p Brittany, Luke,  4 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+
+3/25, 9:00a - 12:00p Luke,  3 hours
+Driver Order and Time Length:
+Luke, 180 minutes
+
+3/25, 5:30p - 10:00p Brittany, Luke,  4.5 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 60 minutes
+
+3/26, 2:00p - 7:30p Brittany, Luke,  5 hours
+Driver Order and Time Length:
+Luke, 60 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+
+3/26, 8:00p - 10:30p Brittany, Luke,  2.5 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+
+3/27, 1:00p - 4:30p Brittany, Luke,  3.5 hours
+Driver Order and Time Length:
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+
+3/27, 6:00p - 11:30p Brittany, Luke,  5.5 hours
+Driver Order and Time Length:
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
+Brittany, 30 minutes
+Luke, 30 minutes
