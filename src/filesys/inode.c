@@ -12,6 +12,7 @@
 
 //-------------------------------------------------------
 #define ENTRIES 128 //sqrt of number of blocks needed
+#define ERROR_CODE -1
 
 //-------------------------------------------------------
 
@@ -64,10 +65,24 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length)
+  /*if (pos < inode->data.length)
     return inode->data.start + pos / BLOCK_SECTOR_SIZE;
   else
-    return -1;
+    return -1; */
+  //-----------------------------------------------------------
+    //determine which block number
+    size_t sectors = bytes_to_sectors(pos);
+    //dbl indirection index
+    int dbl_idx = sectors/BLOCK_SECTOR_SIZE;
+    //single indirection index
+    int single_idx = sectors %BLOCK_SECTOR_SIZE;
+    //traversing indirection tree
+    block_sector_t result = inode->data.dbl_indirection[dbl_idx]->sectors[single_idx];
+    if(result == NULL)
+      return ERROR_CODE;
+
+    return result;
+  //-----------------------------------------------------------
 }
 
 /* List of open inodes, so that opening a single inode twice
