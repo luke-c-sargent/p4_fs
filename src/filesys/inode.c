@@ -15,6 +15,7 @@
 #define HALF_ENTRY 64
 #define DIRECT_PTRS 124
 #define ERROR_CODE -1
+#define MAX_DATA_SECTORS 16384// 8MB
 
 //-------------------------------------------------------
 
@@ -26,8 +27,8 @@ struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     //uint32_t unused[125];               /* Not used. */
-  block_sector_t  direct[DIRECT_PTRS];
-    // will equal block sector size bytes
+    block_sector_t  direct[DIRECT_PTRS];  // 124 direct pointers
+    // will equal block sector size bytes 
     block_sector_t single_indirection;      /* sector where single indirection block lives */
     block_sector_t dbl_indirection;         /* sector where double indirection block lives */
     //total number of direct pointers will be entries*entries
@@ -135,12 +136,48 @@ struct inode
     ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
     disk_inode = calloc (1, sizeof *disk_inode);
+    
     if (disk_inode != NULL)
     {
       size_t sectors = bytes_to_sectors (length); // number of sectors to allocate
-      //disk_inode->length = length;
-      //disk_inode->magic = INODE_MAGIC;
-      /*if (free_map_allocate (sectors, &disk_inode->start)) 
+      disk_inode->length = length;
+      disk_inode->magic = INODE_MAGIC;
+      // determine number of required inodes
+      uint32_t inode_count = 0;
+      uint32_t doubly_indr = 0;
+      uint32_t singly_indr = 0;
+      if(sectors <= DIRECT_PTRS)
+        inode_count = 1; // just this inode is enough
+      else if( sectors <= (DIRECT_PTRS + ENTRIES))
+        inode_count = 2; // need this inode, and a singly indirect table
+      else{
+        uint32_t remain = sectors - (DIRECT_PTRS + ENTRIES);
+        doubly_indr = (remain + MAX_DATA_SECTORS - 1) / (MAX_DATA_SECTORS); // this never happens, max file size is 8MB
+        ASSERT(doubly_indr == 1);
+        singly_indr = (remain + ENTRIES -1) / ENTRIES;
+        inode_count = 2 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
+      }
+      block_sector_t start_sector;
+      // two cases: 
+          // CASE 1: every inode required fits:
+      if ( free_map_allocate (inode_count + sectors, &start_sector) )
+      {
+          // allocate master
+          
+          // allocate 124 direct data blocks
+          // allocate singly indirect inode
+          // allocate 128 direct data blocks
+          // allocate doubly
+          // allocate as many (singly block + 128 data blocks) as necessary
+      }
+      else 
+      {
+        // do it incrementally in a for loop
+      }
+      // 
+
+
+      /*if (free_map_allocate (sectors, &start_sector))
         {
           block_write (fs_device, sector, disk_inode);
           if (sectors > 0) 
