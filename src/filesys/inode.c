@@ -161,8 +161,11 @@ struct inode
       // two cases: 
           // CASE 1: every inode required fits:
       uint32_t blocks_left = inode_count + sectors;   // Total blocks/sectors to write to disk
+      static char zeros[BLOCK_SECTOR_SIZE];
+      block_sector_t start = 0;
       if ( free_map_allocate (blocks_left, &current_sector) )
       {
+          start = current_sector;
           // allocate master in current_sector
           uint32_t direct_blocks = DIRECT_PTRS;
           ++current_sector;
@@ -170,7 +173,7 @@ struct inode
           while(blocks_left && direct_blocks)
           {
             // write zeroes to directly mapped blocks
-
+            block_write (fs_device, current_sector, zeros);
             // update stuff
             disk_inode.direct[index] = current_sector;
             --blocks_left;
@@ -188,11 +191,18 @@ struct inode
             // create RAM single_indirection inode struct singly_whatever
           }
           // WRITE MAIN INODE TO DISK, ZERO MEMORY, USE AS SINGLY INDIRECT
+          block_write (fs_device, start, disk_inode);
+          free (disk_inode);
+
+          struct indirect disk_indr = calloc(1, sizeof indirect);
+
           uint32_t singly_blocks = ENTRIES;
           index = 0;
           while(blocks_left && singly_blocks) // populate single indirection table
           {
             // fill in de singly indirect thing
+            disk_indr[index] = current_sector;
+            block_write (fs_device, current_sector, zeros);
             --blocks_left;
             --singly_blocks;
             ++current_sector;
@@ -227,7 +237,7 @@ struct inode
             }
           success = true; 
         } */
-          free (disk_inode);
+          //free (disk_inode);
         }
         return success;
       }
