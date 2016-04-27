@@ -154,16 +154,18 @@ struct inode
         uint32_t remain = sectors - (DIRECT_PTRS + ENTRIES);
         doubly_indr = (remain + MAX_DATA_SECTORS - 1) / (MAX_DATA_SECTORS); // this never happens, max file size is 8MB
         ASSERT(doubly_indr == 1);
-        singly_indr = (remain + ENTRIES -1) / ENTRIES;
+        singly_indr = (remain + ENTRIES - 1) / ENTRIES;
         inode_count = 2 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
       }
       block_sector_t start_sector;
       // two cases: 
           // CASE 1: every inode required fits:
-      if ( free_map_allocate (inode_count + sectors, &start_sector) )
+      uint32_t blocks_left = inode_count + sectors;   // Total blocks/sectors to write to disk
+      if ( free_map_allocate (blocks_left, &start_sector) )
       {
           // allocate master
-          
+            // update ram
+            // write to disk
           // allocate 124 direct data blocks
           // allocate singly indirect inode
           // allocate 128 direct data blocks
@@ -187,6 +189,7 @@ struct inode
               
               for (i = 0; i < sectors; i++) 
                 block_write (fs_device, disk_inode->start + i, zeros);
+                //update buffer
             }
           success = true; 
         } */
