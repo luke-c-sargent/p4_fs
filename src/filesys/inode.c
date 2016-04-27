@@ -201,11 +201,14 @@ struct inode
           while(blocks_left && singly_blocks) // populate single indirection table
           {
             // fill in de singly indirect thing
+            //if(bool) {current_Sector = allocate}
+            //else (++current_Sector)
             disk_indr[index] = current_sector;
+            
             block_write (fs_device, current_sector, zeros);
             --blocks_left;
             --singly_blocks;
-            ++current_sector;
+            //++current_sector;
             ++index;
           }
             // update ram
@@ -241,6 +244,25 @@ struct inode
         }
         return success;
       }
+
+  inode_create_helper(uint32_t blocks_left, block_sector_t current_sector, char* zeros )
+  {
+    index = 0;
+    while(blocks_left && singly_blocks) // populate single indirection table
+    {
+      // fill in de singly indirect thing
+      if(bool) {current_Sector = allocate}
+      //else (++current_Sector)
+      disk_indr[index] = current_sector;
+
+      block_write (fs_device, current_sector, zeros);
+      --blocks_left;
+      --singly_blocks;
+      //++current_sector;
+      ++index;
+    }
+  }
+
 
 /* Reads an inode from SECTOR
    and returns a `struct inode' that contains it.
