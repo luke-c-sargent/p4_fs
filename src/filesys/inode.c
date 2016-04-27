@@ -251,7 +251,7 @@ struct inode
     while(blocks_left && singly_blocks) // populate single indirection table
     {
       // fill in de singly indirect thing
-      if(bool) {current_Sector = allocate}
+      // if(bool) {current_Sector = allocate}
       //else (++current_Sector)
       disk_indr[index] = current_sector;
 
