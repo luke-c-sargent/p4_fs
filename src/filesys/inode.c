@@ -157,13 +157,47 @@ struct inode
         singly_indr = (remain + ENTRIES - 1) / ENTRIES;
         inode_count = 2 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
       }
-      block_sector_t start_sector;
+      block_sector_t current_sector;
       // two cases: 
           // CASE 1: every inode required fits:
       uint32_t blocks_left = inode_count + sectors;   // Total blocks/sectors to write to disk
-      if ( free_map_allocate (blocks_left, &start_sector) )
+      if ( free_map_allocate (blocks_left, &current_sector) )
       {
-          // allocate master
+          // allocate master in current_sector
+          uint32_t direct_blocks = DIRECT_PTRS;
+          ++current_sector;
+          uint32_t index = 0;
+          while(blocks_left && direct_blocks)
+          {
+            // write zeroes to directly mapped blocks
+
+            // update stuff
+            disk_inode.direct[index] = current_sector;
+            --blocks_left;
+            --direct_blocks;
+            ++current_sector;
+            ++index;
+          }
+          if(blocks_left){
+            //next entry will be singly indirect inode
+            disk_inode.single_indirection = current_sector;
+            ++current_sector;
+            --blocks_left;
+            if(blocks_left > ENTRIES)
+              disk_inode.doubly_indr = current_sector + ENTRIES;
+            // create RAM single_indirection inode struct singly_whatever
+          }
+          // WRITE MAIN INODE TO DISK, ZERO MEMORY, USE AS SINGLY INDIRECT
+          uint32_t singly_blocks = ENTRIES;
+          index = 0;
+          while(blocks_left && singly_blocks) // populate single indirection table
+          {
+            // fill in de singly indirect thing
+            --blocks_left;
+            --singly_blocks;
+            ++current_sector;
+            ++index;
+          }
             // update ram
             // write to disk
           // allocate 124 direct data blocks
