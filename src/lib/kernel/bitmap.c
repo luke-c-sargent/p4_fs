@@ -9,11 +9,10 @@
 #endif
 
 //-------------------------------------------------------
-#define DEBUG 0
+#define DEBUG 1
 
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 //-------------------------------------------------------
-
 
 
 /* Element type.

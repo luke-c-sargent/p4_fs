@@ -182,8 +182,8 @@ byte_to_sector (const struct inode *inode, off_t pos)
         singly_indr = (remain + ENTRIES - 1) / ENTRIES;
         inode_count = 1 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
       }
-      
-      inode_create_helper(inode_count, data_sectors, zeros, disk_inode );
+      if(length)
+        inode_create_helper(inode_count, data_sectors, zeros, disk_inode );
       //write master inode to disk, free memory
       DEBUGMSG("Writing master inode to sector %d\n",sector);
       write_inode_to_sector(disk_inode, sector);
