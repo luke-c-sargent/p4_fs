@@ -7,6 +7,14 @@
 #ifdef FILESYS
 #include "filesys/file.h"
 #endif
+
+//-------------------------------------------------------
+#define DEBUG 0
+
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
+//-------------------------------------------------------
+
+
 
 /* Element type.
 
@@ -79,6 +87,7 @@ struct bitmap *
 bitmap_create (size_t bit_cnt) 
 {
   struct bitmap *b = malloc (sizeof *b);
+  
   if (b != NULL)
     {
       b->bit_cnt = bit_cnt;

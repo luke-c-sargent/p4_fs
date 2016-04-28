@@ -5,6 +5,11 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 
+//-------------------------------------------------------
+#define DEBUG 0
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
+//-------------------------------------------------------
+
 static struct file *free_map_file;   /* Free map file. */
 static struct bitmap *free_map;      /* Free map, one bit per sector. */
 
@@ -80,6 +85,7 @@ free_map_create (void)
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));
   if (free_map_file == NULL)
     PANIC ("can't open free map");
+  DEBUGMSG("calling bitmap_write (free_map, free_map_file)\n");
   if (!bitmap_write (free_map, free_map_file))
     PANIC ("can't write free map");
 }

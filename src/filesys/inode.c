@@ -11,12 +11,14 @@
 #define INODE_MAGIC 0x494e4f44
 
 //-------------------------------------------------------
+#define DEBUG 0
+
 #define ENTRIES 128 //sqrt of number of blocks needed
 #define HALF_ENTRY 64
 #define DIRECT_PTRS 124
 #define ERROR_CODE -1
 #define MAX_DATA_SECTORS 16384// 8MB
-
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 //-------------------------------------------------------
 
 /* On-disk inode.
@@ -26,7 +28,7 @@ struct inode_disk
     //block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    //uint32_t unused[125];               /* Not used. */
+
     block_sector_t  direct[DIRECT_PTRS];  // 124 direct pointers
     // will equal block sector size bytes 
     block_sector_t single_indirection;      /* sector where single indirection block lives */
@@ -43,9 +45,18 @@ struct indirect
 
 struct dbl_indirect
 {
-    // will equal block sector size bytes
+  // will equal block sector size bytes
   block_sector_t indices[ENTRIES]; 
-}
+};
+// FN DECLARATIONS
+//-----------------------------------------------------------------
+void inode_create_helper(uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* ram_inode );
+void contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode );
+void write_inode_to_sector(struct inode_disk* ram_inode, block_sector_t idx);
+
+//-----------------------------------------------------------------
+
+
   //------------------------------------------------------
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -72,40 +83,49 @@ struct inode
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
    static block_sector_t
-   byte_to_sector (const struct inode *inode, off_t pos) 
-   {
-    ASSERT (inode != NULL);
-  /*if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
-    return -1; */
-  //-----------------------------------------------------------
-    ASSERT (pos >= 0);
-    //determine which block number
+byte_to_sector (const struct inode *inode, off_t pos) 
+{
+  ASSERT (inode != NULL);
+
+  ASSERT (pos >= 0);
+  //determine which block number
   size_t sectors = pos / BLOCK_SECTOR_SIZE;
 
+  DEBUGMSG("byte_to_sector converting pos %d\n", pos);
   if (sectors < DIRECT_PTRS)
     return inode->data.direct[sectors];
   else if (sectors < (DIRECT_PTRS + ENTRIES)) // else if it requires single indirection
   {
+    
     block_sector_t single_indr = inode->data.single_indirection;
+    DEBUGMSG("byte_to_sector single table at sector %d\n",single_indr);
     // read the singly indirect table to memory
-    return NULL; // return sector
+    struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
+    block_read (fs_device, single_indr, indirect_buff);
+    block_sector_t result = indirect_buff->indices[sectors-DIRECT_PTRS];
+    free(indirect_buff);
+    return result; // return sector
   } else if (sectors < (DIRECT_PTRS + ENTRIES + ENTRIES*ENTRIES)) {// if indexed by double indirection
+    uint32_t dbl_sectors = sectors - (DIRECT_PTRS + ENTRIES);
+    uint32_t idx_into_double = dbl_sectors / ENTRIES;
+    uint32_t idx_into_single = dbl_sectors % ENTRIES;
+
     block_sector_t dbl_indr = inode->data.dbl_indirection;
-    // read double indirect ptr
-    // read single indirect ptr
-    return NULL; // return sector
+    struct indirect* db_indirect = calloc(1, sizeof(struct indirect));
+    block_read (fs_device, dbl_indr, db_indirect);
+    block_sector_t single_indr = db_indirect->indices[idx_into_double];
+    free(db_indirect);
+
+    struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
+    block_read (fs_device, single_indr, &indirect_buff);
+    block_sector_t result = indirect_buff->indices[idx_into_single];
+    free(indirect_buff);
+    return result; // return sector
+
   } else { // otherwise the sector offset is too big
     return ERROR_CODE;
   }
-
-    if(result == NULL) // if the entry was empty
-      return ERROR_CODE;
-
-    return result;
-  //-----------------------------------------------------------
-  }
+}
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
@@ -126,10 +146,13 @@ struct inode
    bool
    inode_create (block_sector_t sector, off_t length)
    {
+    static char zeros[BLOCK_SECTOR_SIZE];
     struct inode_disk *disk_inode = NULL;
     bool success = false;
 
     ASSERT (length >= 0);
+
+    DEBUGMSG("Creating file of size %d starting at sector %d\n",length, sector);
 
   /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
@@ -139,28 +162,44 @@ struct inode
     
     if (disk_inode != NULL)
     {
-      size_t sectors = bytes_to_sectors (length); // number of sectors to allocate
+      size_t data_sectors = bytes_to_sectors (length); // number of sectors to allocate
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
       // determine number of required inodes
+      
       uint32_t inode_count = 0;
       uint32_t doubly_indr = 0;
       uint32_t singly_indr = 0;
-      if(sectors <= DIRECT_PTRS)
-        inode_count = 1; // just this inode is enough
-      else if( sectors <= (DIRECT_PTRS + ENTRIES))
-        inode_count = 2; // need this inode, and a singly indirect table
+      
+      if(data_sectors <= DIRECT_PTRS)
+        inode_count = 0; // just this inode is enough
+      else if( data_sectors <= (DIRECT_PTRS + ENTRIES))
+        inode_count = 1; // need this inode, and a singly indirect table
       else{
-        uint32_t remain = sectors - (DIRECT_PTRS + ENTRIES);
-        doubly_indr = (remain + MAX_DATA_SECTORS - 1) / (MAX_DATA_SECTORS); // this never happens, max file size is 8MB
-        ASSERT(doubly_indr == 1);
+        uint32_t remain = data_sectors - (DIRECT_PTRS + ENTRIES);
+        doubly_indr = (remain + MAX_DATA_SECTORS - 1) / (MAX_DATA_SECTORS); 
+        ASSERT(doubly_indr == 1);// if this fails, max filesize was too big
         singly_indr = (remain + ENTRIES - 1) / ENTRIES;
-        inode_count = 2 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
+        inode_count = 1 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
       }
-      block_sector_t current_sector;
-      // two cases: 
+      
+      inode_create_helper(inode_count, data_sectors, zeros, disk_inode );
+      //write master inode to disk, free memory
+      DEBUGMSG("Writing master inode to sector %d\n",sector);
+      write_inode_to_sector(disk_inode, sector);
+      free(disk_inode);
+      success = true;
+      DEBUGMSG( "returning true!\n");
+      return success;
+    }
+    else
+      DEBUGMSG("OH SHIT NULL INODE_DISK!\n");
+    return success;
+  }
+
+/*      // two cases: 
           // CASE 1: every inode required fits:
-      uint32_t blocks_left = inode_count + sectors;   // Total blocks/sectors to write to disk
+      uint32_t blocks_left = inode_count + data_sectors;   // Total blocks/sectors to write to disk
       static char zeros[BLOCK_SECTOR_SIZE];
       block_sector_t start = 0;
       if ( free_map_allocate (blocks_left, &current_sector) )
@@ -239,28 +278,182 @@ struct inode
                 //update buffer
             }
           success = true; 
-        } */
+        } 
+          
           //free (disk_inode);
         }
         return success;
-      }
+      }*/
+/*
+  // ---------------------------- added function for getting and setting table entry
+  static block_sector_t*
+  byte_to_entry ( const struct inode *inode, off_t pos ){
+    ASSERT(inode != NULL);
+    // inode data length:
+    uint32_t data_length = inode->data_length;
 
-  inode_create_helper(uint32_t blocks_left, block_sector_t current_sector, char* zeros )
-  {
-    index = 0;
-    while(blocks_left && singly_blocks) // populate single indirection table
-    {
-      // fill in de singly indirect thing
-      // if(bool) {current_Sector = allocate}
-      //else (++current_Sector)
-      disk_indr[index] = current_sector;
-
-      block_write (fs_device, current_sector, zeros);
-      --blocks_left;
-      --singly_blocks;
-      //++current_sector;
-      ++index;
+    if (pos < DIRECT_PTRS){
+      DEBUGMSG("direct_blocks[%d]\n", pos%DIRECT_PTRS);
+      return &inode.data.direct[pos%DIRECT_PTRS];
     }
+    else if (pos < (DIRECT_PTRS + ENTRIES)) // else if it requires single indirection
+    {
+      uint32_t idx_dir=(pos-DIRECT_PTRS)%ENTRIES;
+
+      DEBUGMSG("single_indr[%d]\n", idx_dir);
+
+      return = &inode->data.single_indirection[idx_dir];
+      // read the singly indirect table to memory
+    } else if (pos < (DIRECT_PTRS + ENTRIES + ENTRIES*ENTRIES)) {// if indexed by double indirection
+      uint32_t doub_idx = (pos - (DIRECT_PTRS + ENTRIES))/(ENTRIES);
+      uint32_t sing_idx = (pos - (DIRECT_PTRS + ENTRIES))%(ENTRIES);
+      return &inode->data.dbl_indirection[idx];
+      // read double indirect ptr
+      // read single indirect ptr
+      return NULL; // return sector
+    } else { // otherwise the sector offset is too big
+      return ERROR_CODE;
+    }
+  }*/
+
+  void
+  inode_create_helper(uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* ram_inode )
+  {
+    block_sector_t index = 0;
+    DEBUGMSG("allocating %d blocks ", inode_blocks + data_blocks);
+    if (free_map_allocate(inode_blocks + data_blocks, &index))
+    {
+      DEBUGMSG("contiguously starting at %d\n", index);
+      contiguous(index, inode_blocks, data_blocks, zeros, ram_inode);
+    } else
+    {
+      DEBUGMSG("NO CONTIGUOUS BLOCK TO PLAY WITH\n");
+    }
+  }
+
+  void contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
+  {
+    // since everything is linear, create master table
+    uint32_t data_blocks_left = data_blocks;
+    
+    uint32_t current_idx=0;// the master will be written to the start
+    // direct blocks
+    
+    DEBUGMSG("Start: %d Inode_blocks: %d data_blocks: %d\n", start, inode_blocks, data_blocks);
+    
+    uint32_t i = 0;
+    for(i; i < DIRECT_PTRS; ++i)
+    {
+      DEBUGMSG("writing zero data to sector %d\n", start+current_idx);
+      //write to disk
+      write_inode_to_sector(zeros, start+current_idx);
+
+      // set value in direct entry
+      DEBUGMSG("setting in direct[%d]=%d\n", i, start+current_idx);
+      master_inode->direct[i]=start+current_idx;
+
+      current_idx++;
+      --data_blocks_left;
+      if(!data_blocks_left)
+        break;
+    }
+
+    //direct filled in, calc singly and doubly
+    if(data_blocks > DIRECT_PTRS)
+      master_inode->single_indirection = start + DIRECT_PTRS;
+      if(data_blocks > (DIRECT_PTRS+ENTRIES))
+        master_inode->dbl_indirection = master_inode->single_indirection + ENTRIES + 1;
+
+    if(!data_blocks_left){// only direct, and they've all been allocated
+        DEBUGMSG("no more data blocks left, quitting early!\n");
+        return;
+    }
+
+    //128 entries
+    struct indirect* indr = (struct indirect*)calloc(1,sizeof(struct indirect));
+
+    DEBUGMSG("sizeof indr %d\n", sizeof(struct indirect));
+    ASSERT(sizeof(struct indirect)/4 == ENTRIES);
+    block_sector_t single_ptr= start+current_idx;
+    ++current_idx;
+
+    //on to first singly
+
+    i = 0;
+    for(i; i< ENTRIES; ++i){
+      //populate single
+      DEBUGMSG("setting sector %d in single[%d]\n", start+current_idx, i);
+      write_inode_to_sector(zeros, start+current_idx);
+      indr->indices[i]=start+current_idx;
+      ++current_idx;
+      --data_blocks_left;
+      if(!data_blocks_left){
+        DEBUGMSG("breaking early whoop!!\n");
+        break;
+      }
+    }
+    DEBUGMSG("writing single indr table to disk at sector %d\n", single_ptr);
+    //write single to disk
+    i=0;
+    if (DEBUG)
+    {
+      while (i < ENTRIES)
+      {
+        printf("(%d: [%d])",i, indr->indices[i]);
+        ++i;
+      }
+      printf("\n");
+    }
+    write_inode_to_sector(indr, single_ptr);
+    free(indr);
+
+    if(!data_blocks_left){// only direct, and they've all been allocated
+        DEBUGMSG("no more data blocks left, quitting early!\n");
+        return;
+    }
+
+    //doubly
+    struct indirect* db_indr= calloc(1,sizeof(struct indirect));
+    block_sector_t double_ptr= current_idx;
+    ++current_idx;
+    i=0;
+    for(i; i < ENTRIES*ENTRIES; ++i)
+    {
+      if(!(i%ENTRIES)){ // if it requires creating a single_indirection
+        block_sector_t single_idx = current_idx; // move index forward, this is where single 
+        ++current_idx;
+        db_indr->indices[i/ENTRIES]=single_idx;
+        indr= calloc(1,sizeof(struct indirect));
+      }
+      DEBUGMSG("db:writing single indr table to disk at sector %d\n", single_ptr);
+      write_inode_to_sector(zeros, start+current_idx);
+
+      
+
+      indr->indices[i%ENTRIES] = start+current_idx;
+      ++current_idx;
+      --data_blocks_left;
+
+      if(!data_blocks_left)
+      { // if its an early out, write and quit
+        write_inode_to_sector(db_indr, start + double_ptr);
+        write_inode_to_sector(indr, start + single_ptr);
+        break;
+      }
+      else if(i%ENTRIES == ENTRIES-1) // after this write single
+      {
+        write_inode_to_sector(indr, start + single_ptr);
+        free(indr);
+      } 
+    }
+    free(indr);
+    free(db_indr);
+    ASSERT(!data_blocks_left);
+  }
+
+  void write_inode_to_sector(struct inode_disk* ram_inode, block_sector_t idx){
+    DEBUGMSG("write_inode_to_sector %d\n", idx);
+    block_write (fs_device, idx, ram_inode);
   }
 
 
@@ -270,6 +463,9 @@ struct inode
    struct inode *
    inode_open (block_sector_t sector)
    {
+    //----------------------------------------
+    DEBUGMSG("Attempting to open file system inode at sector %d\n", sector);
+    //----------------------------------------
     struct list_elem *e;
     struct inode *inode;
 
@@ -284,19 +480,25 @@ struct inode
         return inode; 
       }
     }
+    DEBUGMSG("inode not already open...");
 
   /* Allocate memory. */
     inode = malloc (sizeof *inode);
     if (inode == NULL)
       return NULL;
+    DEBUGMSG("memory malloc'd...");
 
   /* Initialize. */
     list_push_front (&open_inodes, &inode->elem);
+    DEBUGMSG("pushed to list...\n");
     inode->sector = sector;
     inode->open_cnt = 1;
     inode->deny_write_cnt = 0;
     inode->removed = false;
+    DEBUGMSG("attempting to read master sector %d\n", inode->sector);
+
     block_read (fs_device, inode->sector, &inode->data);
+    DEBUGMSG("read block\n");
     return inode;
   }
 
@@ -335,9 +537,10 @@ struct inode
       /* Deallocate blocks if removed. */
       if (inode->removed) 
       {
-        free_map_release (inode->sector, 1);
+        ASSERT(false);
+        /*free_map_release (inode->sector, 1);
         free_map_release (inode->data.start,
-          bytes_to_sectors (inode->data.length)); 
+          bytes_to_sectors (inode->data.length)); */
       }
 
       free (inode); 
@@ -359,6 +562,11 @@ struct inode
    off_t
    inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
    {
+    //--------------------------------------------------------------------------
+    //ASSERT(false);
+    //--------------------------------------------------------------------------
+
+
     uint8_t *buffer = buffer_;
     off_t bytes_read = 0;
     uint8_t *bounce = NULL;
