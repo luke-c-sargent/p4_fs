@@ -101,7 +101,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
     DEBUGMSG("byte_to_sector single table at sector %d\n",single_indr);
     // read the singly indirect table to memory
     struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
-    block_read (fs_device, single_indr, indirect_buff);
+    block_read (fs_device, single_indr, indirect_buff); 
     block_sector_t result = indirect_buff->indices[sectors-DIRECT_PTRS];
     free(indirect_buff);
     return result; // return sector
@@ -566,6 +566,9 @@ byte_to_sector (const struct inode *inode, off_t pos)
     //ASSERT(false);
     //--------------------------------------------------------------------------
 
+    /* A read starting from a position past EOF returns no bytes. */
+    if(offset > inode->data.length)
+      return 0;
 
     uint8_t *buffer = buffer_;
     off_t bytes_read = 0;
@@ -628,56 +631,76 @@ byte_to_sector (const struct inode *inode, off_t pos)
     const uint8_t *buffer = buffer_;
     off_t bytes_written = 0;
     uint8_t *bounce = NULL;
-
+    off_t eof = inode->data.length;   //end-of-file in bytes
     if (inode->deny_write_cnt)
       return 0;
 
-    while (size > 0) 
+    /* Writing at a position past EOF extends the file to the position 
+    being written, and any gap between the previous EOF and the start
+    of the write must be filled with zeros.  */
+
+    if((offset + size) > eof)
     {
-      /* Sector to write, starting byte offset within sector. */
-      block_sector_t sector_idx = byte_to_sector (inode, offset);
-      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-
-      /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
-      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-      int min_left = inode_left < sector_left ? inode_left : sector_left;
-
-      /* Number of bytes to actually write into this sector. */
-      int chunk_size = size < min_left ? size : min_left;
-      if (chunk_size <= 0)
-        break;
-
-      if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
+      size_t blocks_needed = (size_t) (((offset + size)/BLOCK_SECTOR_SIZE + 1) - (eof/BLOCK_SECTOR_SIZE + 1));
+      DEBUGMSG("blocks_needed: %d\n", blocks_needed);
+      block_sector_t index; 
+      int i;
+      for(i = 0; i < blocks_needed; ++i)
       {
-          /* Write full sector directly to disk. */
-        block_write (fs_device, sector_idx, buffer + bytes_written);
+        if(!free_map_allocate(1, &index))   //allocate one sector at a time;
+          ASSERT(false); //whole file system full
+        
       }
-      else 
+    }
+    else 
+    {
+      while (size > 0) 
       {
-          /* We need a bounce buffer. */
-        if (bounce == NULL) 
-        {
-          bounce = malloc (BLOCK_SECTOR_SIZE);
-          if (bounce == NULL)
-            break;
-        }
+        /* Sector to write, starting byte offset within sector. */
+        block_sector_t sector_idx = byte_to_sector (inode, offset);
+        int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
-          /* If the sector contains data before or after the chunk
-             we're writing, then we need to read in the sector
-             first.  Otherwise we start with a sector of all zeros. */
-             if (sector_ofs > 0 || chunk_size < sector_left) 
-              block_read (fs_device, sector_idx, bounce);
-            else
-              memset (bounce, 0, BLOCK_SECTOR_SIZE);
-            memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-            block_write (fs_device, sector_idx, bounce);
+        /* Bytes left in inode, bytes left in sector, lesser of the two. */
+        off_t inode_left = inode_length (inode) - offset;
+        int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+        int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+        /* Number of bytes to actually write into this sector. */
+        int chunk_size = size < min_left ? size : min_left;
+        if (chunk_size <= 0)
+          break;
+
+        if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
+        {
+            /* Write full sector directly to disk. */
+          block_write (fs_device, sector_idx, buffer + bytes_written);
+        }
+        else 
+        {
+            /* We need a bounce buffer. */
+          if (bounce == NULL) 
+          {
+            bounce = malloc (BLOCK_SECTOR_SIZE);
+            if (bounce == NULL)
+              break;
           }
 
-      /* Advance. */
-          size -= chunk_size;
-          offset += chunk_size;
-          bytes_written += chunk_size;
+            /* If the sector contains data before or after the chunk
+               we're writing, then we need to read in the sector
+               first.  Otherwise we start with a sector of all zeros. */
+               if (sector_ofs > 0 || chunk_size < sector_left) 
+                block_read (fs_device, sector_idx, bounce);
+              else
+                memset (bounce, 0, BLOCK_SECTOR_SIZE);
+              memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
+              block_write (fs_device, sector_idx, bounce);
+            }
+
+        /* Advance. */
+            size -= chunk_size;
+            offset += chunk_size;
+            bytes_written += chunk_size;
+          }
         }
         free (bounce);
 
