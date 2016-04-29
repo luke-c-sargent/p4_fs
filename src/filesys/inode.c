@@ -19,6 +19,7 @@
 #define ERROR_CODE -1
 #define MAX_DATA_SECTORS 16384// 8MB
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
+#define SHIT 0
 //-------------------------------------------------------
 
 /* On-disk inode.
@@ -537,7 +538,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
       /* Deallocate blocks if removed. */
       if (inode->removed) 
       {
-        ASSERT(false);
+        ASSERT(SHIT);
         /*free_map_release (inode->sector, 1);
         free_map_release (inode->data.start,
           bytes_to_sectors (inode->data.length)); */
@@ -619,6 +620,43 @@ byte_to_sector (const struct inode *inode, off_t pos)
     return bytes_read;
   }
 
+  block_sector_t extend_data_sector(struct inode_disk* inode, block_sector_t sector_idx, block_sector_t free_sector_idx){
+    static char zeros[BLOCK_SECTOR_SIZE];
+    // if its direct, no need to create anything
+    if( sector_idx < DIRECT_PTRS)
+    {
+      inode->direct[sector_idx] = free_sector_idx;
+    }
+    // if its singly indirect, 
+    else if (sector_idx < (DIRECT_PTRS + ENTRIES)){
+      block_sector_t single_table_addr = inode.single_indirection;
+      //is there a singly indirect table?
+      struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
+      if(single_table_addr)// if a table exists, grab it off disk
+      {
+
+        block_read (fs_device, single_indr, indirect_buff); 
+      }
+      else // if there isnt one, allocate a free block to it
+      {
+        if(!free_map_allocate(1,&single_table_addr))// if there is a failure in allocation
+          ASSERT(SHIT); // this shouldnt happen
+      }
+      // should be an empty entry
+      ASSERT(indirect_buff[sector_idx - DIRECT_PTRS]==0);
+      // ... but not for long
+      indirect_buff[sector_idx - DIRECT_PTRS] = free_sector_idx;
+
+      // now write the single table
+      write_inode_to_sector(indirect_buff, single_table_addr);
+    }
+    // if its double indirect
+    else{
+      ASSERT(false); // MORE PLEASE
+    }
+    write_inode_to_sector(zeros, sector_idx);
+  }
+
 /* Writes SIZE bytes from BUFFER into INODE, starting at OFFSET.
    Returns the number of bytes actually written, which may be
    less than SIZE if end of file is reached or an error occurs.
@@ -639,7 +677,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
     being written, and any gap between the previous EOF and the start
     of the write must be filled with zeros.  */
 
-    if((offset + size) > eof)
+    if((offset + size) > eof) // if we will definitely be extending the file
     {
       size_t blocks_needed = (size_t) (((offset + size)/BLOCK_SECTOR_SIZE + 1) - (eof/BLOCK_SECTOR_SIZE + 1));
       DEBUGMSG("blocks_needed: %d\n", blocks_needed);
@@ -649,7 +687,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
       {
         if(!free_map_allocate(1, &index))   //allocate one sector at a time;
           ASSERT(false); //whole file system full
-        
+        extend_data_sector(i + );
       }
     }
     else 
