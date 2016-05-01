@@ -452,7 +452,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
    inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
    {
     //--------------------------------------------------------------------------
-    DEBUGMSG("     inode read called with size %d and offset %d at sector %d. inode_data %d\n", size, offset, inode->sector, inode->data.length);
+    DEBUGMSG("IRA: inode read called with size %d and offset %d at sector %d. data_length %d\n", size, offset, inode->sector, inode->data.length);
     //--------------------------------------------------------------------------
 
     /* A read starting from a position past EOF returns no bytes. */
@@ -465,7 +465,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
     while (size > 0) 
     {
-      DEBUGMSG("Inside read while loop with size %d\n", size);
+      //DEBUGMSG("Inside read while loop with size %d\n", size);
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -473,10 +473,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-      DEBUGMSG("inode_left: %d, sector_left: %d\n", inode_left, sector_left);
+      //DEBUGMSG("inode_left: %d, sector_left: %d\n", inode_left, sector_left);
       int min_left = inode_left < sector_left ? inode_left : sector_left;
 
-      DEBUGMSG("size: %d < min_left %d ? size : min_left\n", size, min_left);
+      //DEBUGMSG("size: %d < min_left %d ? size : min_left\n", size, min_left);
       /* Number of bytes to actually copy out of this sector. */
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0) {
@@ -511,12 +511,12 @@ byte_to_sector (const struct inode *inode, off_t pos)
       bytes_read += chunk_size;
     }
     free (bounce);
-    DEBUGMSG("Bytes_Read: %d\n", bytes_read);
+    DEBUGMSG("IRA: Bytes_Read: %d\n", bytes_read);
     return bytes_read;
   }
 
   block_sector_t extend_data_sector(struct inode_disk* inode, block_sector_t sector_idx, block_sector_t free_sector_idx){
-    DEBUGMSG("extending data::");
+    DEBUGMSG("EDS: ");
     static char zeros[BLOCK_SECTOR_SIZE];
 
     // if its direct, no need to create anything
@@ -524,9 +524,11 @@ byte_to_sector (const struct inode *inode, off_t pos)
     {
       DEBUGMSG("direct[%d] = %d\n", sector_idx, free_sector_idx);
       inode->direct[sector_idx] = free_sector_idx;
+      // do we write it?
     }
     // if its singly indirect, 
-    else if (sector_idx < (DIRECT_PTRS + ENTRIES)){
+    else if (sector_idx < (DIRECT_PTRS + ENTRIES))
+    {
       DEBUGMSG("single indirection sect_idx %d \n", sector_idx);
       block_sector_t single_table_addr = inode->single_indirection;
       //is there a singly indirect table?
@@ -554,10 +556,14 @@ byte_to_sector (const struct inode *inode, off_t pos)
       free(indirect_buff);
     }
     // if its double indirect
-    else{
+    else
+    {
       ASSERT(false); // MORE PLEASE
     }
-    write_inode_to_sector(zeros, sector_idx);
+    // master table
+    //write_inode_to_sector(zeros, sector_idx);
+    DEBUGMSG("Free sector index = %\n", free_sector_idx)
+    write_inode_to_sector(zeros, free_sector_idx);
     //free calloc'd memory
   }
 
@@ -593,7 +599,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
       int i;
       if(!eof) // if end of file is zero, we know nothing's been allocated so we allocate that block
       {
-        DEBUGMSG("[thread:%d] file size zero", thread_current()->tid);
+        DEBUGMSG("!EOF file size zero\n");
         // create an empty data block
         static char zeros[BLOCK_SECTOR_SIZE];
         //DEBUG=0;
@@ -615,7 +621,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
         //DEBUG=1;
         DEBUGMSG("\n");
         block_sector_t next_sector = (inode->data.length/BLOCK_SECTOR_SIZE)+1+i;
-        DEBUGMSG("terminal %d is the next sector\n", next_sector);
+        DEBUGMSG("terminal %d is the next sector at free map location %d\n", next_sector, index);
         extend_data_sector(&inode->data, next_sector, index);
       }
       DEBUGMSG("Extending file size from %d to %d\n", inode->data.length, offset+size);
