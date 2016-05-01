@@ -45,7 +45,7 @@ GETCMD += run 'tar fs.tar /'
 GETCMD += < /dev/null
 GETCMD += 2> $(TEST)-persistence.errors $(if $(VERBOSE),|tee,>) $(TEST)-persistence.output
 
-tests/filesys/extended/%.output: kernel.bin
+tests/filesys/extended/%.output: kernel.bin loader.bin
 	rm -f tmp.dsk
 	pintos-mkdisk tmp.dsk --filesys-size=2
 	$(TESTCMD)

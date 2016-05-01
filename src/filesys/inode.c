@@ -3,6 +3,7 @@
 #include <debug.h>
 #include <round.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdint.h>
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
@@ -206,10 +207,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
   {
     block_sector_t index = 0;
     //DEBUGMSG("allocating %d blocks ", inode_blocks + data_blocks);
-    DEBUG=0;
+    //DEBUG=0;
     if (free_map_allocate(inode_blocks + data_blocks, &index))
     {
-      DEBUG=1;
+      //DEBUG=1;
       //DEBUGMSG("contiguously starting at %d\n", index);
       contiguous(index, inode_blocks, data_blocks, zeros, ram_inode);
     } else
@@ -536,12 +537,12 @@ byte_to_sector (const struct inode *inode, off_t pos)
       }
       else // if there isnt one, allocate a free block to it
       {
-        DEBUG=0;
+        //DEBUG=0;
         if(!free_map_allocate(1,&single_table_addr))// if there is a failure in allocation
         {
           ASSERT(0); // this shouldnt happen
         }
-        DEBUG=1;
+        //DEBUG=1;
       }
       // should be an empty entry
       ASSERT(indirect_buff->indices[sector_idx - DIRECT_PTRS]==0);
@@ -595,12 +596,12 @@ byte_to_sector (const struct inode *inode, off_t pos)
         DEBUGMSG("[thread:%d] file size zero", thread_current()->tid);
         // create an empty data block
         static char zeros[BLOCK_SECTOR_SIZE];
-        DEBUG=0;
+        //DEBUG=0;
         if(!free_map_allocate(1, &index)){
           DEBUGMSG("free map allocation failed\n");
           ASSERT(false);
         }
-        DEBUG=1;
+        //DEBUG=1;
         write_inode_to_sector(zeros, index);
         inode->data.direct[0]=index;
         DEBUGMSG("updated direct memory mapping\n");
@@ -608,10 +609,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
       DEBUGMSG("Beginning for loop to add blocks\n");
       for(i = 0; i < blocks_needed; ++i)
       {
-        DEBUG=0;
+        //DEBUG=0;
         if(!free_map_allocate(1, &index))   //allocate one sector at a time;
           ASSERT(false); //whole file system full
-        DEBUG=1;
+        //DEBUG=1;
         DEBUGMSG("\n");
         block_sector_t next_sector = (inode->data.length/BLOCK_SECTOR_SIZE)+1+i;
         DEBUGMSG("terminal %d is the next sector\n", next_sector);
