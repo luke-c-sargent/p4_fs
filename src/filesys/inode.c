@@ -24,7 +24,7 @@
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 
 
-static uint32_t DEBUG = 0;
+static uint32_t DEBUG = 1;
 //-------------------------------------------------------
 
 /* On-disk inode.
@@ -692,7 +692,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
     }
     // master table
     //write_inode_to_sector(zeros, sector_idx);
-    DEBUGMSG("Free sector index = %\n", free_sector_idx)
+    DEBUGMSG("Free sector index = %d\n", free_sector_idx)
     write_inode_to_sector(zeros, free_sector_idx);
     //free calloc'd memory
   }
@@ -711,8 +711,9 @@ byte_to_sector (const struct inode *inode, off_t pos)
     off_t bytes_written = 0;
     uint8_t *bounce = NULL;
     off_t eof = inode->data.length;   //end-of-file in bytes
-    if (inode->deny_write_cnt){
-      DEBUGMSG("Inode deny write cnt, whatever that means\n");
+    if (inode->deny_write_cnt)
+    {
+      //DEBUGMSG("Inode deny write cnt, whatever that means\n");
       return 0;
     }
 
@@ -722,25 +723,26 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
     if((offset + size) > eof) // if we will definitely be extending the file
     {
-      DEBUGMSG("offset: %d, size: %d, eof: %d\n", offset, size, eof);
+      //DEBUGMSG("offset: %d, size: %d, eof: %d\n", offset, size, eof);
       size_t blocks_needed = (size_t) (((offset + size)/BLOCK_SECTOR_SIZE + 1) - (eof/BLOCK_SECTOR_SIZE + 1));
-      DEBUGMSG("EXTENSION: %d blocks_needed\n", blocks_needed);
+      DEBUGMSG("\tEXTENSION: %d blocks_needed\n", blocks_needed);
       block_sector_t index; 
       int i;
       if(!eof) // if end of file is zero, we know nothing's been allocated so we allocate that block
       {
-        DEBUGMSG("!EOF file size zero\n");
+        //DEBUGMSG("!EOF file size zero\n");
         // create an empty data block
         static char zeros[BLOCK_SECTOR_SIZE];
         //DEBUG=0;
-        if(!free_map_allocate(1, &index)){
-          DEBUGMSG("free map allocation failed\n");
+        if(!free_map_allocate(1, &index))
+        {
+          //DEBUGMSG("free map allocation failed\n");
           ASSERT(false);
         }
         //DEBUG=1;
         write_inode_to_sector(zeros, index);
         inode->data.direct[0]=index;
-        DEBUGMSG("updated direct memory mapping\n");
+        //DEBUGMSG("updated direct memory mapping\n");
       }
       DEBUGMSG("Beginning for loop to add blocks\n");
       for(i = 0; i < blocks_needed; ++i)
@@ -749,21 +751,21 @@ byte_to_sector (const struct inode *inode, off_t pos)
         if(!free_map_allocate(1, &index))   //allocate one sector at a time;
           ASSERT(false); //whole file system full
         //DEBUG=1;
-        DEBUGMSG("\n");
+        //DEBUGMSG("\n");
         block_sector_t next_sector = (inode->data.length/BLOCK_SECTOR_SIZE)+1+i;
         DEBUGMSG("terminal %d is the next sector at free map location %d\n", next_sector, index);
         extend_data_sector(&inode->data, next_sector, index);
       }
-      DEBUGMSG("Extending file size from %d to %d\n", inode->data.length, offset+size);
+      //DEBUGMSG("Extending file size from %d to %d\n", inode->data.length, offset+size);
       inode->data.length = offset + size;
-      DEBUGMSG("inode length: %d, sector: %d\n",inode_length(inode), inode->sector);
+      //DEBUGMSG("inode length: %d, sector: %d\n",inode_length(inode), inode->sector);
       write_inode_to_sector(&inode->data, inode->sector);
       char steve_buffer[BLOCK_SECTOR_SIZE]; 
       block_read(fs_device, inode->sector, steve_buffer);
-      DEBUGMSG("inode length: %d\n", ((struct inode_disk*)steve_buffer)->length);
+      //DEBUGMSG("inode length: %d\n", ((struct inode_disk*)steve_buffer)->length);
       
     }
-
+    DEBUGMSG("In between terminal and wrote\n");
     while (size > 0) 
     {
       /* Sector to write, starting byte offset within sector. */
@@ -798,23 +800,24 @@ byte_to_sector (const struct inode *inode, off_t pos)
           /* If the sector contains data before or after the chunk
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
-            if (sector_ofs > 0 || chunk_size < sector_left) 
-              block_read (fs_device, sector_idx, bounce);
-            else
-              memset (bounce, 0, BLOCK_SECTOR_SIZE);
-            memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-            block_write (fs_device, sector_idx, bounce);
+          if (sector_ofs > 0 || chunk_size < sector_left) 
+            block_read (fs_device, sector_idx, bounce);
+          else
+            memset (bounce, 0, BLOCK_SECTOR_SIZE);
+          memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
+          block_write (fs_device, sector_idx, bounce);
       }
 
       /* Advance. */
-          size -= chunk_size;
-          offset += chunk_size;
-          bytes_written += chunk_size;
-        }
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_written += chunk_size;
+    } //end while loop
+
       free (bounce);
-      DEBUGMSG("Wrote %d bytes \n", bytes_written);
+      DEBUGMSG("Wrote %d bytes \n\n", bytes_written);
       return bytes_written;
-    }
+  } //end of function
 
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
