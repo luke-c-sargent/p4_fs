@@ -213,12 +213,142 @@ byte_to_sector (const struct inode *inode, off_t pos)
       //DEBUG=1;
       //DEBUGMSG("contiguously starting at %d\n", index);
       contiguous(index, inode_blocks, data_blocks, zeros, ram_inode);
-    } else
+    } 
+    else
     {
-      DEBUGMSG("NO CONTIGUOUS BLOCK TO PLAY WITH\n");
-      ASSERT(false);
-      contiguous(UINT32_MAX, inode_blocks, data_blocks, zeros, ram_inode);
+      // DEBUGMSG("NO CONTIGUOUS BLOCK TO PLAY WITH\n");
+      // ASSERT(false);
+      incremental(inode_blocks, data_blocks, zeros, ram_inode);
     }
+  }
+
+  void incremental( uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
+  {
+     // since everything is linear, create master table
+    uint32_t data_blocks_left = data_blocks;
+    // uint32_t current_idx=0;// the master will be written to the start
+    block_sector_t block_allocated = 0;
+    // direct blocks
+    
+    //DEBUGMSG("Start: %d Inode_blocks: %d data_blocks: %d\n", start, inode_blocks, data_blocks);
+    
+    uint32_t i = 0;
+    for(i; i < DIRECT_PTRS; ++i)
+    {
+      //DEBUGMSG("writing zero data to sector %d\n", start+current_idx);
+      //write to disk
+      if(!free_map_allocate(1,  &block_allocated))
+        ASSERT(false);
+      write_inode_to_sector(zeros, block_allocated);
+
+      // set value in direct entry
+      //DEBUGMSG("setting in direct[%d]=%d\n", i, start+current_idx);
+      master_inode->direct[i]=block_allocated;
+
+      --data_blocks_left;
+      if(!data_blocks_left)
+        break;
+    }
+
+    if(!data_blocks_left)
+      return;
+
+    //direct filled in, calc singly and doubly
+    if(data_blocks > DIRECT_PTRS)
+    {
+      //Allocate single indirection table
+      if(!free_map_allocate(1,  &block_allocated))
+        ASSERT(false);
+      master_inode->single_indirection = block_allocated;
+    }
+    if(data_blocks > (DIRECT_PTRS+ENTRIES))
+    {
+      //Allocate double indirection table
+      if(!free_map_allocate(1,  &block_allocated))
+        ASSERT(false);
+      master_inode->dbl_indirection = block_allocated;
+    }
+
+
+    //128 entries
+    struct indirect* indr = (struct indirect*)calloc(1,sizeof(struct indirect));
+
+    //DEBUGMSG("sizeof indr %d\n", sizeof(struct indirect));
+    ASSERT(sizeof(struct indirect)/4 == ENTRIES);
+
+    //on to first singly
+
+    i = 0;
+    for(i; i< ENTRIES; ++i){
+      //populate single
+      //DEBUGMSG("setting sector %d in single[%d]\n", start+current_idx, i);
+      if(!free_map_allocate(1,  &block_allocated))
+          ASSERT(false);
+      write_inode_to_sector(zeros, block_allocated);
+      indr->indices[i]=block_allocated;
+      --data_blocks_left;
+      if(!data_blocks_left){
+        //DEBUGMSG("breaking early whoop!!\n");
+        break;
+      }
+    }
+    //DEBUGMSG("writing single indr table to disk at sector %d\n", single_ptr);
+    //write single to disk
+    // i=0;
+    // if (DEBUG)
+    // {
+    //   while (i < ENTRIES)
+    //   {
+    //     printf("(%d: [%d])",i, indr->indices[i]);
+    //     ++i;
+    //   }
+    //   printf("\n");
+    // }
+    write_inode_to_sector(indr, master_inode->single_indirection);
+    free(indr);
+
+    if(!data_blocks_left){// only direct, and they've all been allocated
+        //DEBUGMSG("no more data blocks left, quitting early!\n");
+        return;
+    }
+
+    //doubly
+    struct indirect* db_indr= calloc(1,sizeof(struct indirect));
+    block_sector_t single_idx;
+    i=0;
+    for(i; i < ENTRIES*ENTRIES; ++i)
+    {
+      if(!(i%ENTRIES)){ // if it requires creating a single_indirection
+        if(!free_map_allocate(1,  &block_allocated))
+          ASSERT(false);
+        single_idx = block_allocated; // move index forward, this is where single 
+        db_indr->indices[i/ENTRIES]=single_idx;
+        indr= calloc(1,sizeof(struct indirect));
+      }
+      //DEBUGMSG("db:writing single indr table to disk at sector %d\n", single_ptr);
+      if(!free_map_allocate(1,  &block_allocated))
+          ASSERT(false);
+      write_inode_to_sector(zeros, block_allocated);
+
+
+      indr->indices[i%ENTRIES] = block_allocated;
+      --data_blocks_left;
+
+      if(!data_blocks_left)
+      { // if its an early out, write and quit
+        write_inode_to_sector(db_indr, master_inode->dbl_indirection);
+        write_inode_to_sector(indr, single_idx);
+        break;
+      }
+      else if(i%ENTRIES == ENTRIES-1) // after this write single
+      {
+        write_inode_to_sector(indr, single_idx);
+        free(indr);
+      } 
+    }
+    free(indr);
+    free(db_indr);
+    ASSERT(!data_blocks_left);
   }
 
   void contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
