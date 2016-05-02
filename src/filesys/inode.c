@@ -24,7 +24,7 @@
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 
 
-static uint32_t DEBUG = 1;
+static uint32_t DEBUG = 0;
 //-------------------------------------------------------
 
 /* On-disk inode.
@@ -104,12 +104,13 @@ byte_to_sector (const struct inode *inode, off_t pos)
   {
     
     block_sector_t single_indr = inode->data.single_indirection;
-    //DEBUGMSG("byte_to_sector single table at sector %d\n",single_indr);
     // read the singly indirect table to memory
     struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
     block_read (fs_device, single_indr, indirect_buff); 
     block_sector_t result = indirect_buff->indices[sectors-DIRECT_PTRS];
     free(indirect_buff);
+    
+    DEBUGMSG("byte_to_sector single table at sector %d, returning %d\n",single_indr, result);
     return result; // return sector
   } else if (sectors < (DIRECT_PTRS + ENTRIES + ENTRIES*ENTRIES)) {// if indexed by double indirection
     uint32_t dbl_sectors = sectors - (DIRECT_PTRS + ENTRIES);
@@ -582,7 +583,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
    inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
    {
     //--------------------------------------------------------------------------
-    DEBUGMSG("IRA: inode read called with size %d and offset %d at sector %d. data_length %d\n", size, offset, inode->sector, inode->data.length);
+    DEBUGMSG("IReadAt: size %d and offset %d at master inode sector %d. data_length %d\n", size, offset, inode->sector, inode->data.length);
     //--------------------------------------------------------------------------
 
     /* A read starting from a position past EOF returns no bytes. */
@@ -593,7 +594,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
     off_t bytes_read = 0;
     uint8_t *bounce = NULL;
 
-    while (size > 0) 
+    while (size > 0)
     {
       //DEBUGMSG("Inside read while loop with size %d\n", size);
       /* Disk sector to read, starting byte offset within sector. */
@@ -609,8 +610,9 @@ byte_to_sector (const struct inode *inode, off_t pos)
       //DEBUGMSG("size: %d < min_left %d ? size : min_left\n", size, min_left);
       /* Number of bytes to actually copy out of this sector. */
       int chunk_size = size < min_left ? size : min_left;
-      if (chunk_size <= 0) {
-        DEBUGMSG("Chunk size error: %d\n", chunk_size);
+      if (chunk_size <= 0)
+      {
+        DEBUGMSG("CHUNK size error: %d size: %d\n", chunk_size, size);
         break;
       }
 
@@ -659,7 +661,6 @@ byte_to_sector (const struct inode *inode, off_t pos)
     // if its singly indirect, 
     else if (sector_idx < (DIRECT_PTRS + ENTRIES))
     {
-      DEBUGMSG("single indirection sect_idx %d \n", sector_idx);
       block_sector_t single_table_addr = inode->single_indirection;
       //is there a singly indirect table?
       struct indirect* indirect_buff = calloc(1, sizeof(struct indirect));
@@ -669,13 +670,15 @@ byte_to_sector (const struct inode *inode, off_t pos)
       }
       else // if there isnt one, allocate a free block to it
       {
-        //DEBUG=0;
+        DEBUGMSG("\n");
         if(!free_map_allocate(1,&single_table_addr))// if there is a failure in allocation
         {
           ASSERT(0); // this shouldnt happen
         }
+        inode->single_indirection = single_table_addr;
         //DEBUG=1;
       }
+      DEBUGMSG("\n\n~~single indirection sect_idx %d single_indirection ptr %d\n\n", sector_idx, inode->single_indirection);
       // should be an empty entry
       ASSERT(indirect_buff->indices[sector_idx - DIRECT_PTRS]==0);
       // ... but not for long
@@ -765,7 +768,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
       //DEBUGMSG("inode length: %d\n", ((struct inode_disk*)steve_buffer)->length);
       
     }
-    DEBUGMSG("In between terminal and wrote\n");
+    DEBUGMSG("In between terminal\n");
     while (size > 0) 
     {
       /* Sector to write, starting byte offset within sector. */
@@ -779,8 +782,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
       /* Number of bytes to actually write into this sector. */
       int chunk_size = size < min_left ? size : min_left;
-      if (chunk_size <= 0)
+      if (chunk_size <= 0){
+        DEBUGMSG("CHUNKZ: %d SIZE: %d\n", chunk_size, size);
         break;
+      }
 
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
       {
