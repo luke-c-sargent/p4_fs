@@ -18,7 +18,7 @@
 
 #define ENTRIES 128 //sqrt of number of blocks needed
 #define HALF_ENTRY 64
-#define DIRECT_PTRS 124
+#define DIRECT_PTRS 123     //Ali: changed from 124 to 123
 #define ERROR_CODE -1
 #define MAX_DATA_SECTORS 16384// 8MB
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
@@ -32,10 +32,11 @@ static uint32_t DEBUG = 0;
 struct inode_disk
 {
     //block_sector_t start;               /* First data sector. */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
+    off_t length;                         /* File size in bytes. */
+    unsigned magic;                       /* Magic number. */
+    int is_dir;                          /* If true, file is directory */      //Ali: is this struct equal to 512 bytes?
 
-    block_sector_t  direct[DIRECT_PTRS];  // 124 direct pointers
+    block_sector_t  direct[DIRECT_PTRS];  // 123 direct pointers
     // will equal block sector size bytes 
     block_sector_t single_indirection;      /* sector where single indirection block lives */
     block_sector_t dbl_indirection;         /* sector where double indirection block lives */
@@ -56,8 +57,9 @@ struct dbl_indirect
 };
 // FN DECLARATIONS
 //-----------------------------------------------------------------
-void inode_create_helper(uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* ram_inode );
-void contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode );
+bool inode_create_helper(uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* ram_inode );
+bool contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode );
+bool incremental( uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode );
 void write_inode_to_sector(struct inode_disk* ram_inode, block_sector_t idx);
 
 //-----------------------------------------------------------------
@@ -151,13 +153,14 @@ byte_to_sector (const struct inode *inode, off_t pos)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
    bool
-   inode_create (block_sector_t sector, off_t length)
+   inode_create (block_sector_t sector, off_t length, int is_dir)
    {
     static char zeros[BLOCK_SECTOR_SIZE];
     struct inode_disk *disk_inode = NULL;
     bool success = false;
 
-    ASSERT (length >= 0);
+    if (length < 0)
+      return false;
 
     //DEBUGMSG("Creating file of size %d starting at sector %d\n",length, sector);
 
@@ -172,8 +175,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
       size_t data_sectors = bytes_to_sectors (length); // number of sectors to allocate
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      if(is_dir)
+        disk_inode->is_dir = 1;
+
       // determine number of required inodes
-      
       uint32_t inode_count = 0;
       uint32_t doubly_indr = 0;
       uint32_t singly_indr = 0;
@@ -190,20 +195,21 @@ byte_to_sector (const struct inode *inode, off_t pos)
         inode_count = 1 + doubly_indr + singly_indr;// need this inode, a singly indirect, a doubly indirect, then an additional
       }
       if(length)
-        inode_create_helper(inode_count, data_sectors, zeros, disk_inode );
+        success = inode_create_helper(inode_count, data_sectors, zeros, disk_inode );
+      else
+        success = true;
       //write master inode to disk, free memory
       //DEBUGMSG("Writing master inode to sector %d\n",sector);
       write_inode_to_sector(disk_inode, sector);
       free(disk_inode);
-      success = true;
-      return success;
     }
-    else
+    else {
       DEBUGMSG("OH SHIT NULL INODE_DISK!\n");
+    }
     return success;
   }
 
-  void
+  bool
   inode_create_helper(uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* ram_inode )
   {
     block_sector_t index = 0;
@@ -213,17 +219,17 @@ byte_to_sector (const struct inode *inode, off_t pos)
     {
       //DEBUG=1;
       //DEBUGMSG("contiguously starting at %d\n", index);
-      contiguous(index, inode_blocks, data_blocks, zeros, ram_inode);
+      return contiguous(index, inode_blocks, data_blocks, zeros, ram_inode);
     } 
     else
     {
       // DEBUGMSG("NO CONTIGUOUS BLOCK TO PLAY WITH\n");
       // ASSERT(false);
-      incremental(inode_blocks, data_blocks, zeros, ram_inode);
+      return incremental(inode_blocks, data_blocks, zeros, ram_inode);
     }
   }
 
-  void incremental( uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
+  bool incremental( uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
   {
      // since everything is linear, create master table
     uint32_t data_blocks_left = data_blocks;
@@ -238,8 +244,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
     {
       //DEBUGMSG("writing zero data to sector %d\n", start+current_idx);
       //write to disk
-      if(!free_map_allocate(1,  &block_allocated))
-        ASSERT(false);
+      if(!free_map_allocate(1,  &block_allocated)){
+        // ASSERT(false);
+        return false;
+      }
       write_inode_to_sector(zeros, block_allocated);
 
       // set value in direct entry
@@ -252,21 +260,25 @@ byte_to_sector (const struct inode *inode, off_t pos)
     }
 
     if(!data_blocks_left)
-      return;
+      return true;
 
     //direct filled in, calc singly and doubly
     if(data_blocks > DIRECT_PTRS)
     {
       //Allocate single indirection table
-      if(!free_map_allocate(1,  &block_allocated))
-        ASSERT(false);
+      if(!free_map_allocate(1,  &block_allocated)){
+        // ASSERT(false);
+        return false;
+      }
       master_inode->single_indirection = block_allocated;
     }
     if(data_blocks > (DIRECT_PTRS+ENTRIES))
     {
       //Allocate double indirection table
-      if(!free_map_allocate(1,  &block_allocated))
-        ASSERT(false);
+      if(!free_map_allocate(1,  &block_allocated)){
+        // ASSERT(false);
+        return false;
+      }
       master_inode->dbl_indirection = block_allocated;
     }
 
@@ -283,8 +295,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
     for(i; i< ENTRIES; ++i){
       //populate single
       //DEBUGMSG("setting sector %d in single[%d]\n", start+current_idx, i);
-      if(!free_map_allocate(1,  &block_allocated))
-          ASSERT(false);
+      if(!free_map_allocate(1,  &block_allocated)){
+          // ASSERT(false);
+          return false;
+        }
       write_inode_to_sector(zeros, block_allocated);
       indr->indices[i]=block_allocated;
       --data_blocks_left;
@@ -310,7 +324,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
     if(!data_blocks_left){// only direct, and they've all been allocated
         //DEBUGMSG("no more data blocks left, quitting early!\n");
-        return;
+        return true;
     }
 
     //doubly
@@ -320,15 +334,19 @@ byte_to_sector (const struct inode *inode, off_t pos)
     for(i; i < ENTRIES*ENTRIES; ++i)
     {
       if(!(i%ENTRIES)){ // if it requires creating a single_indirection
-        if(!free_map_allocate(1,  &block_allocated))
-          ASSERT(false);
+        if(!free_map_allocate(1,  &block_allocated)){
+          // ASSERT(false);
+          return false;
+        }
         single_idx = block_allocated; // move index forward, this is where single 
         db_indr->indices[i/ENTRIES]=single_idx;
         indr= calloc(1,sizeof(struct indirect));
       }
       //DEBUGMSG("db:writing single indr table to disk at sector %d\n", single_ptr);
-      if(!free_map_allocate(1,  &block_allocated))
-          ASSERT(false);
+      if(!free_map_allocate(1,  &block_allocated)){
+          // ASSERT(false);
+          return false;
+        }
       write_inode_to_sector(zeros, block_allocated);
 
 
@@ -349,10 +367,13 @@ byte_to_sector (const struct inode *inode, off_t pos)
     }
     free(indr);
     free(db_indr);
-    ASSERT(!data_blocks_left);
+    if(!data_blocks_left)
+      return true;
+    else
+      return false;
   }
 
-  void contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
+  bool contiguous(uint32_t start, uint32_t inode_blocks, uint32_t data_blocks, char* zeros, struct inode_disk* master_inode )
   {
     // since everything is linear, create master table
     uint32_t data_blocks_left = data_blocks;
@@ -386,7 +407,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
     if(!data_blocks_left){// only direct, and they've all been allocated
         //DEBUGMSG("no more data blocks left, quitting early!\n");
-        return;
+        return true;
     }
 
     //128 entries
@@ -429,7 +450,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
     if(!data_blocks_left){// only direct, and they've all been allocated
         //DEBUGMSG("no more data blocks left, quitting early!\n");
-        return;
+        return true;
     }
 
     //doubly
@@ -468,7 +489,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
     }
     free(indr);
     free(db_indr);
-    ASSERT(!data_blocks_left);
+    if(!data_blocks_left)
+      return true;
+    else
+      return false;
   }
 
   void write_inode_to_sector(struct inode_disk* ram_inode, block_sector_t idx){
