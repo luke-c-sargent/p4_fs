@@ -297,6 +297,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
       //DEBUGMSG("setting sector %d in single[%d]\n", start+current_idx, i);
       if(!free_map_allocate(1,  &block_allocated)){
           // ASSERT(false);
+          free(indr);
           return false;
         }
       write_inode_to_sector(zeros, block_allocated);
@@ -336,15 +337,19 @@ byte_to_sector (const struct inode *inode, off_t pos)
       if(!(i%ENTRIES)){ // if it requires creating a single_indirection
         if(!free_map_allocate(1,  &block_allocated)){
           // ASSERT(false);
+          free(indr);
+          free(db_indr);
           return false;
         }
         single_idx = block_allocated; // move index forward, this is where single 
         db_indr->indices[i/ENTRIES]=single_idx;
-        indr= calloc(1,sizeof(struct indirect));
+        indr= calloc(1,sizeof(struct indirect)); //Ali: Possible memory leak if doubly fails, all its singlies will need to be freed. Not just doubly?
       }
       //DEBUGMSG("db:writing single indr table to disk at sector %d\n", single_ptr);
       if(!free_map_allocate(1,  &block_allocated)){
           // ASSERT(false);
+          free(indr);
+          free(db_indr);
           return false;
         }
       write_inode_to_sector(zeros, block_allocated);
@@ -561,6 +566,17 @@ byte_to_sector (const struct inode *inode, off_t pos)
   {
     return inode->sector;
   }
+
+
+// ----------------------------------------------------
+/* Returns INODE's is_dir value from within inode_disk data */
+
+bool 
+inode_get_is_dir (const struct inode *inode)
+{
+  return (bool) inode->data.is_dir;
+}
+// ----------------------------------------------------
 
 /* Closes INODE and writes it to disk. (Does it?  Check code.)
    If this was the last reference to INODE, frees its memory.

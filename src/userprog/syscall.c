@@ -9,6 +9,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
+#include "filesys/inode.h"
 
 #define SYSCALL_ERROR -1
 
@@ -685,3 +686,32 @@ bool is_user_and_mapped (void* addr)
 {
   return is_user_vaddr (addr) && is_paged (addr);
 }
+
+// bool chdir (const char *dir){}
+// bool mkdir (const char *dir){}
+// bool readdir (int fd, char *name){}
+bool isdir (int fd)
+{
+  struct file *temp_file = fd_to_file_ptr(fd);
+  if(temp_file == NULL)
+    return false;
+  struct inode *temp_inode = file_get_inode(temp_file);
+  if(temp_inode == NULL)
+    return false;
+  int result = inode_get_is_dir (temp_inode);
+  return (bool) result;
+}
+
+
+int inumber (int fd)
+{
+  struct file *temp_file = fd_to_file_ptr(fd);
+  if(temp_file == NULL)
+    return false;
+  struct inode *temp_inode = file_get_inode(temp_file);
+  if(temp_inode == NULL)
+    return false;
+  block_sector_t result = inode_get_inumber(temp_inode);
+  return (int) result;
+}
+
