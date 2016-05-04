@@ -9,6 +9,8 @@
 
 //---------------------------------------------------------
 #include "threads/synch.h"
+#include "threads/thread.h"
+
 #define DEBUG 0
 //---------------------------------------------------------
 
@@ -108,8 +110,10 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, 16))      // Should that number be 32 now?
     PANIC ("root directory creation failed");
   free_map_close ();
+  struct thread* initial_thread = thread_current();
+  initial_thread->cwd = dir_open_root();    // Set initial threads cwd to root directory
   printf ("done.\n");
 }

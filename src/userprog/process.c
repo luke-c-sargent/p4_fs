@@ -89,6 +89,13 @@ process_execute (const char *file_name)
     printf("gettig TID %d child struct\n", tid);
 
   struct thread* child_thread_ptr = get_child_by_tid (tid)->child_pointer;
+  // ------------------------------------------ Ali
+  // Giving the child the parents cwd
+
+  struct thread* parent_thread_ptr = thread_current();
+  child_thread_ptr->cwd = dir_reopen(parent_thread_ptr->cwd);
+  // ------------------------------------------
+
   if(DEBUG)
   {
     struct thread_child* tcp = get_child_struct_by_child(child_thread_ptr);

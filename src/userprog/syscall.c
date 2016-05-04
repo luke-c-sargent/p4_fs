@@ -20,6 +20,15 @@ bool is_paged (void* addr);
 int get_file_descriptor (char* file_ptr);
 struct file * fd_to_file_ptr (int fd);
 bool is_user_and_mapped (void* addr);
+
+/* filesys: directory system calls */
+bool chdir (const char *dir);
+bool mkdir (const char *dir);
+bool readdir (int fd, char *name);
+bool isdir (int fd);
+int inumber (int fd);
+
+
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
 
@@ -231,7 +240,67 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg_error_check (f->esp,1);
       break;
     }
-    default:
+    case SYS_CHDIR:                 /* Change the current directory. */
+    {
+      if (DEBUG)
+        printf ("SYS_CHDIR signal\n");
+      arg_error_check (f->esp,1);
+      f->eax = chdir (*(char**)(f->esp + 4));
+      break;
+    }                  
+    case SYS_MKDIR:                  /* Create a directory. */
+    {
+      if (DEBUG)
+        printf ("SYS_MKDIR signal\n");
+      arg_error_check (f->esp,1);
+      f->eax = mkdir (*(char**)(f->esp + 4));
+      break;
+    }
+    case SYS_READDIR:                /* Reads a directory entry. */
+    {
+      if (DEBUG)
+        printf ("SYS_READDIR signal\n");
+      arg_error_check (f->esp,2);
+
+      int fd = *(int*)(f->esp+4);
+      if ( fd == STDOUT_FILENO || fd_to_file_ptr (fd) == NULL)
+      {
+          if (DEBUG)
+              printf ("bad FD\n");
+          f->eax = SYSCALL_ERROR;
+          exit (SYSCALL_ERROR);
+      }
+
+      char * buffer = *(char**)(f->esp+8);
+       //check if buffer address is valid
+      if (buffer == NULL || !is_user_vaddr (buffer) || !is_paged (buffer))
+      {
+          if (DEBUG)
+              printf ("buffer is bad\n");
+          f->eax = SYSCALL_ERROR;
+          exit (SYSCALL_ERROR);
+      }
+
+      f->eax = readdir (fd, buffer);
+      break;
+    }
+    case SYS_ISDIR:                  /* Tests if a fd represents a directory. */
+    {
+      if (DEBUG)
+        printf ("SYS_ISDIR signal\n");
+      arg_error_check (f->esp,1);
+      f->eax = isdir (*(int*)(f->esp+4));
+      break;
+    }
+    case SYS_INUMBER:                /* Returns the inode number for a fd. */
+    {
+      if (DEBUG)
+        printf ("SYS_INUMBER signal\n");
+      arg_error_check (f->esp,1);
+      f->eax = inumber (*(int*)(f->esp+4));
+      break;
+    }
+      default:
       if (DEBUG)
         printf ("ERROR: uncaught exception");
   } // end switch
@@ -687,9 +756,24 @@ bool is_user_and_mapped (void* addr)
   return is_user_vaddr (addr) && is_paged (addr);
 }
 
-// bool chdir (const char *dir){}
-// bool mkdir (const char *dir){}
-// bool readdir (int fd, char *name){}
+bool chdir (const char *dir)
+{
+  ASSERT(false);
+  return false;
+}
+
+bool mkdir (const char *dir)
+{
+  ASSERT(false);
+  return false;
+}
+
+bool readdir (int fd, char *name)
+{
+  ASSERT(false);
+  return false;
+}
+
 bool isdir (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
