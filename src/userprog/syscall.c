@@ -756,9 +756,13 @@ bool is_user_and_mapped (void* addr)
   return is_user_vaddr (addr) && is_paged (addr);
 }
 
+// Changes the current working directory of the process to dir,
+// which may be relative or absolute. Returns true if successful,
+// false on failure.
+
 bool chdir (const char *dir)
 {
-  ASSERT(false);
+  
   return false;
 }
 
@@ -799,3 +803,35 @@ int inumber (int fd)
   return (int) result;
 }
 
+char* navigate_path(const char* path)
+{
+  if(path == '/')
+    navigate_absolute(path);
+  else
+}
+
+
+char* navigate_absolute(const char* path)
+{
+  char * arg_copy = palloc_get_page (0);
+  if (arg_copy == NULL){
+    printf("ERROR: ARG COPY FAIL\n");
+    return SYSCALL_ERROR;
+  }
+
+  strlcpy (arg_copy, path, PGSIZE);      //Ali: PGSIZE?
+  char *token, *save_ptr;
+  int indexer = 0;
+  for (token = strtok_r (arg_copy, "/", &save_ptr); token != NULL;
+    token = strtok_r (NULL, "/", &save_ptr))
+  {
+    int length = strlen(token);
+    if (DEBUG)
+      printf ("[%d]'%s'\n", length, token);
+    strlcpy (arg_copy + indexer, token, length+1);
+    indexer += length + 1;
+  }
+
+
+  return;
+}
