@@ -456,15 +456,15 @@ bool create (const char *file, unsigned initial_size)
     exit (SYSCALL_ERROR);
 
   struct thread* curr_thread = thread_current();
-  char** parse_array = parse_path(file);
+  
  // old directory
   struct dir* old_dir = curr_thread->cwd;
-  struct inode* temp_inode;
   struct dir* temp_dir = old_dir;
   if(is_absolute(file))
    temp_dir = dir_open_root();
 
  // set new cwd
+  char** parse_array = parse_path(file);
   uint32_t args = 0;
   if(parse_array)
     args = arg_array_count(parse_array);
@@ -472,34 +472,21 @@ bool create (const char *file, unsigned initial_size)
   if(args>1)
   {
     {
-      uint32_t directory_count = args -1;
-      uint32_t i = 0;
-      for(i; i < directory_count; ++i)
-      {
-        //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
-        if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
-          DEBUGMSG("create: assballs in the house\n");
-          return false;
-          
-        }
-      }
-      DEBUGMSG("create: FAAAAACK I NEED SLEEP\n");
-      temp_dir = dir_open(temp_inode);
-      if(!temp_dir)
-      {
-        return false;
-      }
-      curr_thread->cwd = temp_dir;
+      curr_thread->cwd =  navigate_path( args, parse_array, temp_dir);
     }
     DEBUGMSG("CREATING FILE %s\n", parse_array[args-1]);
-    if(!filesys_create(parse_array[args-1], 0, false)){
+    if(!filesys_create(parse_array[args-1], initial_size, false)){
       DEBUGMSG("create filesys_create failed\n");
       curr_thread->cwd = old_dir;
+      free_parse_path(parse_array);
       return false;
     }
     curr_thread->cwd = old_dir;
+    free_parse_path(parse_array);
     return true;
-  } else {
+  }
+  else 
+  {
     if (DEBUG)
     printf ("file ptr: %p valid? %d\n",file, is_paged (file));
     if (DEBUG)
@@ -516,7 +503,7 @@ bool create (const char *file, unsigned initial_size)
     sema_up (&filesys_sema);
     if (DEBUG)
       printf ("   ... success!\n");
-
+    free_parse_path(parse_array);
     return created;
   }
 
@@ -828,7 +815,7 @@ bool chdir (const char *dir)
   char** parse_array = parse_path(dir);
  // old directory
   struct dir* old_dir = curr_thread->cwd;
-  struct inode* temp_inode;
+  // struct inode* temp_inode;
   struct dir* temp_dir = old_dir;
   if(is_absolute(dir))
    temp_dir = dir_open_root();
@@ -841,28 +828,18 @@ bool chdir (const char *dir)
   DEBUGMSG("chdir: Before if(args>0)\n");
   if(args>0)
   {
-    uint32_t directory_count = args -1;
-    uint32_t i = 0;
-    DEBUGMSG("chdir: In if(args>0\n");
-    for(i; i < directory_count; ++i)
+    curr_thread->cwd = navigate_path( args, parse_array, temp_dir);
+    if(curr_thread->cwd == NULL)
     {
-      //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
-      if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
-        DEBUGMSG("chdir: dir_lookup FAILED\n");
-        return false;
-        
-      }
-    }
-    DEBUGMSG("chdir: dir_lookup FAILED\n");
-    temp_dir = dir_open(temp_inode);
-    if(!temp_dir)
-    {
+      curr_thread->cwd = old_dir;
+      free_parse_path(parse_array);
       return false;
     }
     dir_close(old_dir);
-    curr_thread->cwd = temp_dir;
+    free_parse_path(parse_array);
     return true;
   }
+  free_parse_path(parse_array);
   return false;
 }
 
@@ -891,33 +868,20 @@ bool mkdir (const char *dir)
 
   if(args>1)
   {
-    // DEBUGMSG("mkdir: In args>1 if statement\n");
-    // uint32_t directory_count = args -1;
-    // uint32_t i = 0;
-    // for(i; i < directory_count; ++i)
-    // {
-    //   DEBUGMSG("mkdir: In for loop\n");
-    //   if(!dir_lookup(temp_dir, parse_array[i], temp_inode))
-    //     return false;
-    // }
-
-    // temp_dir = dir_open(*temp_inode);
-    // if(!temp_dir)
-    // {
-    //   return false;
-    // }
     curr_thread->cwd = navigate_path( args, parse_array, temp_dir);
   }
-  DEBUGMSG("Ali's a ho %p\n", curr_thread->cwd);
+  DEBUGMSG("Ali's a lovely person %p\n", curr_thread->cwd);
   if(!filesys_create(parse_array[args-1], 0, true)){
     DEBUGMSG("mkdir filesys_create failed\n");
     curr_thread->cwd = old_dir;
+    free_parse_path(parse_array);
     return false;
   }
   DEBUGMSG("CWD: %p\n",thread_current()->cwd);
   DEBUGMSG("CREATED DIRECTORY %s @ inode %d \n", parse_array[args-1], inode_get_inumber(dir_get_inode(thread_current()->cwd)));
   if(old_dir)
     curr_thread->cwd = old_dir;
+  free_parse_path(parse_array);
   return true;
 }
 
@@ -1023,6 +987,12 @@ char** parse_path(const char* in)
   //return out;
 }
 
+void free_parse_path(char** aa)
+{
+  free(aa[0]);
+  free(aa);
+}
+
 uint32_t arg_array_count(char** aa)
 {
   DEBUGMSG("!!!!!!!!!\n");
@@ -1051,11 +1021,10 @@ struct dir* navigate_path(uint32_t args, char** parse_array, struct dir* temp_di
   {
     //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
     if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
-      DEBUGMSG("create: assballs in the house\n");
       return NULL;
     }
   }
-  DEBUGMSG("create: FAAAAACK I NEED SLEEP\n");
+
   temp_dir = dir_open(temp_inode);
   if(!temp_dir)
   {
