@@ -10,6 +10,7 @@
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
 #include "filesys/inode.h"
+#include "filesys/directory.h"
 
 
 #define SYSCALL_ERROR -1
@@ -21,6 +22,7 @@ bool is_paged (void* addr);
 int get_file_descriptor (char* file_ptr);
 struct file * fd_to_file_ptr (int fd);
 bool is_user_and_mapped (void* addr);
+uint32_t arg_array_count(char** aa);
 
 /* filesys: directory system calls */
 bool chdir (const char *dir);
@@ -28,9 +30,9 @@ bool mkdir (const char *dir);
 bool readdir (int fd, char *name);
 bool isdir (int fd);
 int inumber (int fd);
-char* parse_path(const char* in);
+char** parse_path(const char* in);
 
-
+bool is_absolute(const char* path);
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
 #define DEBUG 1
@@ -445,12 +447,17 @@ int wait (pid_t pid)
 // returns: boolean representing success
 bool create (const char *file, unsigned initial_size)
 {
-  if (DEBUG)
+/*  if (DEBUG)
     printf ("file ptr: %p valid? %d\n",file, is_paged (file));
-  
-  char* cp = parse_path(file);
-  
+  char** parsed_path = parse_path(file);
+  uint32_t arg_count = arg_array_count(parsed_path);
+  if(!arg_count)
+    exit(SYSCALL_ERROR);
 
+  //hex_dump(cp,cp,16,1);
+  //ASSERT(false);
+  //struct dir* new_dir = navigate_path(file);
+  
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
@@ -469,7 +476,47 @@ bool create (const char *file, unsigned initial_size)
   if (DEBUG)
     printf ("   ... success!\n");
 
-  return created;
+  return created;*/
+
+  struct thread* curr_thread = thread_current();
+  char** parse_array = parse_path(file);
+ // old directory
+  struct dir* old_dir = curr_thread->cwd;
+  struct inode* temp_inode;
+  struct dir* temp_dir = old_dir;
+ // set new cwd
+  uint32_t args = arg_array_count(parse_array);
+  if(args>1)
+  {
+    uint32_t directory_count = args -1;
+    uint32_t i = 0;
+    for(i; i < directory_count; ++i)
+    {
+      //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
+      if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
+        DEBUGMSG("assballs in the house\n");
+        return false;
+        
+      }
+    }
+    DEBUGMSG("FAAAAACK I NEED SLEEP\n");
+    temp_dir = dir_open(temp_inode);
+    if(!temp_dir)
+    {
+      return false;
+    }
+    curr_thread->cwd = temp_dir;
+  }
+  DEBUGMSG("CREATING FILE %s\n", parse_array[args-1]);
+  if(!filesys_create(parse_array[args-1], 0, false)){
+    DEBUGMSG("create filesys_create failed\n");
+    curr_thread->cwd = old_dir;
+    return false;
+  }
+  curr_thread->cwd = old_dir;
+  return true;
+
+
 }
 // remove:
 // what it does: removes a file from the filesystem
@@ -774,10 +821,43 @@ bool chdir (const char *dir)
 
 bool mkdir (const char *dir)
 {
-  if(!filesys_create(dir, 0, true)){
+  struct thread* curr_thread = thread_current();
+  char** parse_array = parse_path(dir);
+ // old directory
+  struct dir* old_dir = curr_thread->cwd;
+  struct inode** temp_inode;
+  struct dir* temp_dir = old_dir;
+ // set new cwd
+  uint32_t args = arg_array_count(parse_array);
+  if(args>1)
+  {
+    DEBUGMSG("mkdir: In args>1 if statement\n");
+    uint32_t directory_count = args -1;
+    uint32_t i = 0;
+    for(i; i < directory_count; ++i)
+    {
+      DEBUGMSG("mkdir: In for loop\n");
+      if(!dir_lookup(temp_dir, parse_array[i], temp_inode))
+        return false;
+    }
+
+    temp_dir = dir_open(*temp_inode);
+    if(!temp_dir)
+    {
+      return false;
+    }
+    curr_thread->cwd = temp_dir;
+  }
+  DEBUGMSG("Ali's a ho %p\n", curr_thread->cwd);
+  if(!filesys_create(parse_array[args-1], 0, true)){
     DEBUGMSG("mkdir filesys_create failed\n");
+    curr_thread->cwd = old_dir;
     return false;
   }
+  DEBUGMSG("CWD: %p\n",thread_current()->cwd);
+  DEBUGMSG("CREATED DIRECTORY %s @ inode %d \n", parse_array[args-1], inode_get_inumber(dir_get_inode(thread_current()->cwd)));
+  if(old_dir)
+    curr_thread->cwd = old_dir;
   return true;
 }
 
@@ -818,8 +898,15 @@ int inumber (int fd)
 
   double nulls are used to detect end of arguments
 */
-char* parse_path(const char* in)
-{  size_t pathsize = strlen(in);
+char** parse_path(const char* in)
+{ 
+  
+  if(in[0]==NULL){
+    DEBUGMSG("in[0] is null\n");
+    ASSERT(false);
+  }
+
+  size_t pathsize = strlen(in);
   char* out;
   // FREE THE BELOW
   out = calloc (1, pathsize+2); // REMEMBER TO FREE
@@ -829,46 +916,86 @@ char* parse_path(const char* in)
   char *token, *save_ptr;
   int indexer = 0;
   int length;
+  uint32_t arg_count=0;
   for (token = strtok_r (out, "/", &save_ptr); token != NULL;
     token = strtok_r (NULL, "/", &save_ptr))
   {
     length = strlen(token);
-    if (DEBUG)
-      printf ("[%d]'%s@%p'\n", length, token, (out+length));
+    // if (DEBUG)
+    //   printf ("[%d]'%s@%p'\n", length, token, (out+length));
 
     strlcpy (out + indexer, token, length+1);
+    ++arg_count;
     indexer += length + 1;
   }
   if(DEBUG){hex_dump(out,out,16,1);}
-  ASSERT(false);
-
-  return out;
-}
-
-char* navigate_absolute(const char* path)
-{
-  char * parsed_path = parse_path(path);
-  struct dir *dir = dir_open_root ();
-  struct inode  ** inode_pp;
-  
-  dir_lookup (dir, parsed_path, inode_pp);
-  
-  while( *inode_pp )//null on failure
+  // FREEE MEEEEE
+  char** arg_array = (char**)calloc(1, sizeof(char*)*(arg_count+1)); // <-- free me
+  // FREEEEE MEEEEE
+  int i = 1;
+  int index=0;
+  arg_array[0] = out;
+  DEBUGMSG("arg_count=%d\n", arg_count);
+  for( i; i < arg_count; ++i )
   {
+    DEBUGMSG("i= %d\n",i);
+    while(out[index]!=NULL){
+      DEBUGMSG("index=%d\n",index);
+      index++;
+    }
+    DEBUGMSG("zero at %d\n",index);
+    index++;
+    arg_array[i]=&out[index];
+    if(DEBUG){printf("!!!%s\n",arg_array[i]);}
+  }
+  if(DEBUG){
+    i=0;
+    while(arg_array[i]){
+      printf("aa[%d]=%s\n", i, arg_array[i]);
+      ++i;
+    }
 
   }
-  return;
-}
-char* navigate_relative(const char* path)
-{
-  
-  char * parsed_path = parse_path(path);
+  //ASSERT(false);
+  return arg_array;
+  //return out;
 }
 
-char* navigate_path(const char* path)
+// char* navigate_absolute(const char* path)
+// {
+//   char * parsed_path = parse_path(path);
+//   struct dir *dir = dir_open_root ();
+//   struct inode  ** inode_pp;
+  
+//   dir_lookup (dir, parsed_path, inode_pp);
+  
+//   int index = 0;
+//   while( *inode_pp &&  )//null on failure
+//   {
+
+//   }
+//   return;
+// }
+// char* navigate_relative(const char* path)
+// {
+  
+//   char * parsed_path = parse_path(path);
+// }
+
+uint32_t arg_array_count(char** aa)
 {
-  if(path[0] == '/')
-    navigate_absolute(path);
-  else
-    navigate_relative(path);
+  DEBUGMSG("!!!!!!!!!\n");
+  uint32_t i=0;
+  uint32_t count=0;
+  while(aa[i]){
+    ++count;
+    ++i;
+  }
+  DEBUGMSG("arg_array count = %d\n", count);
+  return count;
+}
+
+bool is_absolute(const char* path)
+{
+  return path[0] == '/';
 }

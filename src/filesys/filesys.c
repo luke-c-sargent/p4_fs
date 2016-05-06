@@ -23,7 +23,7 @@ static void do_format (void);
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void
-filesys_init (bool format) 
+filesys_init (bool format)
 {
   fs_device = block_get_role (BLOCK_FILESYS);
   if (fs_device == NULL)
@@ -61,15 +61,22 @@ bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
+  //struct thread* curr_thread = thread_current();
+      DEBUGMSG(" ~~~~~HOLY SHITBALLS~~~~~~~~~~~\n");
   struct dir *dir = dir_open_root (); // thread current, with null check
+  /*if(curr_thread->cwd==NULL){
+    ASSERT(false);
+    //curr_thread->cwd = dir_open_root();}
+  }*/
+  //struct dir* dir = curr_thread->cwd;
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  dir_close (dir);
-
+  dir_close (dir); // may need to comment this out <-------------------------------
+  // DEBUGMSG("n")
   return success;
 }
 
