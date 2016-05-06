@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/filesys.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -610,7 +611,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->cwd=NULL;
+  t->cwd_i = ROOT_DIR_SECTOR;
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);

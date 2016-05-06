@@ -10,6 +10,7 @@
 //---------------------------------------------------------
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "userprog/syscall.h"
 
 #define DEBUG 0
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
@@ -61,14 +62,8 @@ bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
-  //struct thread* curr_thread = thread_current();
-      DEBUGMSG(" ~~~~~HOLY SHITBALLS~~~~~~~~~~~\n");
-  struct dir *dir = dir_open_root (); // thread current, with null check
-  /*if(curr_thread->cwd==NULL){
-    ASSERT(false);
-    //curr_thread->cwd = dir_open_root();}
-  }*/
-  //struct dir* dir = curr_thread->cwd;
+  struct dir *dir = sector_to_dir(thread_current()->cwd_i); // thread current, with null check
+
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir)
@@ -88,7 +83,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = sector_to_dir(thread_current()->cwd_i);
   struct inode *inode = NULL;
 
   if (dir != NULL)
@@ -105,7 +100,7 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = sector_to_dir(thread_current()->cwd_i);
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
 
@@ -121,7 +116,7 @@ do_format (void)
   if (!dir_create (ROOT_DIR_SECTOR, 16))      // Should that number be 32 now?
     PANIC ("root directory creation failed");
   free_map_close ();
-  struct thread* initial_thread = thread_current();
-  initial_thread->cwd = dir_open_root();    // Set initial threads cwd to root directory
+//  struct thread* initial_thread = thread_current();
+//  initial_thread->cwd = dir_open_root();    // Set initial threads cwd to root directory
   printf ("done.\n");
 }

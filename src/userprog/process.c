@@ -93,7 +93,7 @@ process_execute (const char *file_name)
   // Giving the child the parents cwd
 
   struct thread* parent_thread_ptr = thread_current();
-  child_thread_ptr->cwd = dir_reopen(parent_thread_ptr->cwd);
+  child_thread_ptr->cwd_i = parent_thread_ptr->cwd_i;
   // ------------------------------------------
 
   if(DEBUG)

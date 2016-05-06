@@ -6,6 +6,7 @@
 #include <stdint.h>
 //----------------------------------------
 #include "threads/synch.h"
+#include "devices/block.h"
 //----------------------------------------
 
 /* States in a thread's life cycle. */
@@ -113,7 +114,8 @@ struct thread
 
     struct list_elem* child_list_elem; // this is stupid
 
-    struct dir* cwd;        /* Current Working Directory */
+    //struct dir* cwd;        /* Current Working Directory */
+    block_sector_t cwd_i;
     //------------------------------------------------------------
 
     /* Owned by thread.c. */

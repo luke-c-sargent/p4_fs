@@ -33,7 +33,7 @@ int inumber (int fd);
 char** parse_path(const char* in);
 
 bool is_absolute(const char* path);
-struct dir* navigate_path(uint32_t args, char** parse_array, struct dir* temp_dir);
+block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t temp_dir);
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
 #define DEBUG 0
@@ -448,20 +448,23 @@ int wait (pid_t pid)
 // returns: boolean representing success
 bool create (const char *file, unsigned initial_size)
 {
-  if(!(*file))
-    return false;
 
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
 
+  if(!(*file))
+    return false;
+
   struct thread* curr_thread = thread_current();
   
  // old directory
-  struct dir* old_dir = curr_thread->cwd;
-  struct dir* temp_dir = old_dir;
+  //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
+  block_sector_t old_cwd_i = curr_thread->cwd_i;
+  DEBUGMSG("CREATE CWD_I: %d\n", old_cwd_i);
+  //struct dir* temp_dir = old_dir;
   if(is_absolute(file))
-   temp_dir = dir_open_root();
+   curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
  // set new cwd
   char** parse_array = parse_path(file);
@@ -472,16 +475,17 @@ bool create (const char *file, unsigned initial_size)
   if(args>1)
   {
     {
-      curr_thread->cwd =  navigate_path( args, parse_array, temp_dir);
+      curr_thread->cwd_i =  navigate_path( args, parse_array, curr_thread->cwd_i);
+      DEBUGMSG("CREATE NEW CWD %d\n", curr_thread->cwd_i);
     }
-    DEBUGMSG("CREATING FILE %s\n", parse_array[args-1]);
+    DEBUGMSG("CREATING FILE %s at sector %d \n", parse_array[args-1], curr_thread->cwd_i);
     if(!filesys_create(parse_array[args-1], initial_size, false)){
       DEBUGMSG("create filesys_create failed\n");
-      curr_thread->cwd = old_dir;
+      curr_thread->cwd_i = old_cwd_i;
       free_parse_path(parse_array);
       return false;
     }
-    curr_thread->cwd = old_dir;
+    curr_thread->cwd_i = old_cwd_i;
     free_parse_path(parse_array);
     return true;
   }
@@ -805,20 +809,21 @@ bool is_user_and_mapped (void* addr)
 
 bool chdir (const char *dir)
 {
-  if(!(*dir))
-    return false;
 
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
 
+  if(!(*dir))
+    return false;
+  
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
  // old directory
-  struct dir* old_dir = curr_thread->cwd;
+  block_sector_t old_cwd_i = curr_thread->cwd_i;
+
   // struct inode* temp_inode;
-  struct dir* temp_dir = old_dir;
   if(is_absolute(dir))
-   temp_dir = dir_open_root();
+   curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
  // set new cwd
   uint32_t args = 0;
@@ -826,16 +831,17 @@ bool chdir (const char *dir)
     args = arg_array_count(parse_array);
 
   DEBUGMSG("chdir: Before if(args>0)\n");
+  DEBUGMSG("CHDIR OLD CWD = %d\n", curr_thread->cwd_i);
   if(args>0)
   {
-    curr_thread->cwd = navigate_path( args, parse_array, temp_dir);
-    if(curr_thread->cwd == NULL)
+    curr_thread->cwd_i = navigate_path( args+1, parse_array, curr_thread->cwd_i);
+    DEBUGMSG("CHDIR NEW CWD = %d\n", curr_thread->cwd_i);
+    if(curr_thread->cwd_i == NULL)
     {
-      curr_thread->cwd = old_dir;
+      curr_thread->cwd_i = old_cwd_i;
       free_parse_path(parse_array);
       return false;
     }
-    dir_close(old_dir);
     free_parse_path(parse_array);
     return true;
   }
@@ -845,21 +851,22 @@ bool chdir (const char *dir)
 
 bool mkdir (const char *dir)
 {
-  if(!(*dir))
-    return false;
 
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
 
+  if(!(*dir))
+    return false;
+
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
  // old directory
-  struct dir* old_dir = curr_thread->cwd;
-  
+  block_sector_t old_cwd_i = curr_thread->cwd_i;
+  DEBUGMSG("MKDIR CWD: %d\n", old_cwd_i);
   //Checking if absolute or relative path
-  struct dir* temp_dir = old_dir;
+  //struct dir* temp_dir = old_dir;
   if(is_absolute(dir))
-   temp_dir = dir_open_root();
+   curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
  // Counts number of directories to transfer in path
   uint32_t args = 0;
@@ -868,19 +875,17 @@ bool mkdir (const char *dir)
 
   if(args>1)
   {
-    curr_thread->cwd = navigate_path( args, parse_array, temp_dir);
+    curr_thread->cwd_i = navigate_path( args, parse_array, curr_thread->cwd_i);
+    DEBUGMSG("MKDIR NEW CWD: %d\n", curr_thread->cwd_i);
   }
-  DEBUGMSG("Ali's a lovely person %p\n", curr_thread->cwd);
   if(!filesys_create(parse_array[args-1], 0, true)){
     DEBUGMSG("mkdir filesys_create failed\n");
-    curr_thread->cwd = old_dir;
+    curr_thread->cwd_i = old_cwd_i;
     free_parse_path(parse_array);
     return false;
   }
-  DEBUGMSG("CWD: %p\n",thread_current()->cwd);
-  DEBUGMSG("CREATED DIRECTORY %s @ inode %d \n", parse_array[args-1], inode_get_inumber(dir_get_inode(thread_current()->cwd)));
-  if(old_dir)
-    curr_thread->cwd = old_dir;
+  if(old_cwd_i)
+    curr_thread->cwd_i = old_cwd_i;
   free_parse_path(parse_array);
   return true;
 }
@@ -1012,23 +1017,41 @@ bool is_absolute(const char* path)
 }
 
 // pass in args, temp_dir, char** parse_array 
-struct dir* navigate_path(uint32_t args, char** parse_array, struct dir* temp_dir)
+block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t dir_sector)
 {
+  int idx=0;
+  while(parse_array[idx]){
+    DEBUGMSG("ARGS: %s\n", parse_array[idx]);
+    ++idx;
+  }
+  DEBUGMSG("~~~~~~~~~~~~~~~~~~~~~~~~\nNAVIGATE: from %d ", dir_sector);
   struct inode** temp_inode;
   uint32_t directory_count = args -1;
   uint32_t i = 0;
+  struct dir* temp_dir = sector_to_dir(dir_sector);
   for(i; i < directory_count; ++i)
   {
     //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
     if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
       return NULL;
     }
+    temp_dir = dir_open(temp_inode);
+    DEBUGMSG("to %d ", dir_to_sector(temp_dir));
   }
-
-  temp_dir = dir_open(temp_inode);
+  DEBUGMSG("\n");
   if(!temp_dir)
   {
     return NULL;
   }
-  return temp_dir;
+  return dir_to_sector(temp_dir);
+}
+
+struct dir* sector_to_dir(block_sector_t in)
+{
+  return dir_open(inode_open(in));
+}
+
+block_sector_t dir_to_sector(struct dir* dir)
+{
+  return inode_get_inumber(dir_get_inode(dir));
 }

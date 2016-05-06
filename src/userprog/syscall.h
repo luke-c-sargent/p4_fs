@@ -1,5 +1,6 @@
 #include <debug.h>
 #include <stdbool.h>
+#include "devices/block.h"
 
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
@@ -21,5 +22,8 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
+struct dir* sector_to_dir (block_sector_t in);
+block_sector_t dir_to_sector(struct dir* dir);
 
 #endif /* userprog/syscall.h */
