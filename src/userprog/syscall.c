@@ -518,9 +518,46 @@ bool create (const char *file, unsigned initial_size)
 // returns: boolean representing success
 bool remove (const char *file)
 {
+
+  // -----------------------------------------------------
+  struct thread* curr_thread = thread_current();
+  
+ // old directory
+  //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
+  block_sector_t old_cwd_i = curr_thread->cwd_i;
+  DEBUGMSG("REMOVE CWD_I: %d\n", old_cwd_i);
+  //struct dir* temp_dir = old_dir;
+  if(is_absolute(file))
+   curr_thread->cwd_i = ROOT_DIR_SECTOR;
+
+ // set new cwd
+  char** parse_array = parse_path(file);
+  uint32_t args = 0;
+  if(parse_array)
+    args = arg_array_count(parse_array);
+
+  if(args>1)
+  {
+    {
+      curr_thread->cwd_i =  navigate_path( args, parse_array, curr_thread->cwd_i);
+      DEBUGMSG("REMOVE NEW CWD %d\n", curr_thread->cwd_i);
+    }
+    DEBUGMSG("REMOVING FILE %s at sector %d \n", parse_array[args-1], curr_thread->cwd_i);
+    if(!filesys_remove(parse_array[args-1]))
+    {
+      DEBUGMSG("remove filesys_create failed\n");
+      curr_thread->cwd_i = old_cwd_i;
+      free_parse_path(parse_array);
+      return false;
+    }
+    curr_thread->cwd_i = old_cwd_i;
+    free_parse_path(parse_array);
+    return true;
+  }
+  // ------------------------------------------------------
+  //else
   if (DEBUG)
     printf ("sema-downing in remove...   ");
-
   sema_down (&filesys_sema);
   if (DEBUG)
     printf ("   ... success!\n");
@@ -934,6 +971,8 @@ bool readdir (int fd, char *name)
 {
   if (name == NULL || !is_paged (name))
     exit (SYSCALL_ERROR);
+
+
   ASSERT(false);
   return false;
 }

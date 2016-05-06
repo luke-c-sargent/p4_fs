@@ -597,12 +597,13 @@ inode_get_is_dir (const struct inode *inode)
       /* Deallocate blocks if removed. */
       if (inode->removed) 
       {
-        ASSERT(false);
-        /*free_map_release (inode->sector, 1);
-        free_map_release (inode->data.start,
-          bytes_to_sectors (inode->data.length)); */
+        int i=0;
+        for(i; i < inode->data.length; i+=512)
+        {
+          free_map_release (bytes_to_sectors(i), 1);
+        }
+        free_map_release (inode->sector, 1);
       }
-
       free (inode); 
     }
   }
