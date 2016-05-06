@@ -11,6 +11,7 @@
 #include "threads/palloc.h"
 #include "filesys/inode.h"
 
+
 #define SYSCALL_ERROR -1
 
 struct filesys_sema;
@@ -27,12 +28,13 @@ bool mkdir (const char *dir);
 bool readdir (int fd, char *name);
 bool isdir (int fd);
 int inumber (int fd);
+char* parse_path(const char* in);
 
 
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
-
-#define DEBUG 0
+#define DEBUG 1
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 
 void
 syscall_init (void) 
@@ -445,6 +447,10 @@ bool create (const char *file, unsigned initial_size)
 {
   if (DEBUG)
     printf ("file ptr: %p valid? %d\n",file, is_paged (file));
+  
+  char* cp = parse_path(file);
+  
+
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
@@ -454,7 +460,7 @@ bool create (const char *file, unsigned initial_size)
   sema_down (&filesys_sema);
   if (DEBUG)
     printf ("   ... success!\n");
-  bool created = filesys_create (file, initial_size);
+  bool created = filesys_create (file, initial_size, false);
 
   if (DEBUG)
     printf ("sema up-ing....   ");
@@ -768,8 +774,11 @@ bool chdir (const char *dir)
 
 bool mkdir (const char *dir)
 {
-  ASSERT(false);
-  return false;
+  if(!filesys_create(dir, 0, true)){
+    DEBUGMSG("mkdir filesys_create failed\n");
+    return false;
+  }
+  return true;
 }
 
 bool readdir (int fd, char *name)
@@ -790,7 +799,6 @@ bool isdir (int fd)
   return (bool) result;
 }
 
-
 int inumber (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
@@ -803,35 +811,64 @@ int inumber (int fd)
   return (int) result;
 }
 
-char* navigate_path(const char* path)
-{
-  if(path == '/')
-    navigate_absolute(path);
-  else
-}
+// returns a parsed path that ends in two null values.
+/* examples: 
+  /a/b/c-> a null b null c null null
+  foo/bar/wat = foo null bar null wat null null
 
+  double nulls are used to detect end of arguments
+*/
+char* parse_path(const char* in)
+{  size_t pathsize = strlen(in);
+  char* out;
+  // FREE THE BELOW
+  out = calloc (1, pathsize+2); // REMEMBER TO FREE
+  // FREE THE ABOVE
+  strlcpy(out, in, pathsize+2);
+
+  char *token, *save_ptr;
+  int indexer = 0;
+  int length;
+  for (token = strtok_r (out, "/", &save_ptr); token != NULL;
+    token = strtok_r (NULL, "/", &save_ptr))
+  {
+    length = strlen(token);
+    if (DEBUG)
+      printf ("[%d]'%s@%p'\n", length, token, (out+length));
+
+    strlcpy (out + indexer, token, length+1);
+    indexer += length + 1;
+  }
+  if(DEBUG){hex_dump(out,out,16,1);}
+  ASSERT(false);
+
+  return out;
+}
 
 char* navigate_absolute(const char* path)
 {
-  char * arg_copy = palloc_get_page (0);
-  if (arg_copy == NULL){
-    printf("ERROR: ARG COPY FAIL\n");
-    return SYSCALL_ERROR;
-  }
-
-  strlcpy (arg_copy, path, PGSIZE);      //Ali: PGSIZE?
-  char *token, *save_ptr;
-  int indexer = 0;
-  for (token = strtok_r (arg_copy, "/", &save_ptr); token != NULL;
-    token = strtok_r (NULL, "/", &save_ptr))
+  char * parsed_path = parse_path(path);
+  struct dir *dir = dir_open_root ();
+  struct inode  ** inode_pp;
+  
+  dir_lookup (dir, parsed_path, inode_pp);
+  
+  while( *inode_pp )//null on failure
   {
-    int length = strlen(token);
-    if (DEBUG)
-      printf ("[%d]'%s'\n", length, token);
-    strlcpy (arg_copy + indexer, token, length+1);
-    indexer += length + 1;
+
   }
-
-
   return;
+}
+char* navigate_relative(const char* path)
+{
+  
+  char * parsed_path = parse_path(path);
+}
+
+char* navigate_path(const char* path)
+{
+  if(path[0] == '/')
+    navigate_absolute(path);
+  else
+    navigate_relative(path);
 }

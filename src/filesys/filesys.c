@@ -12,6 +12,7 @@
 #include "threads/thread.h"
 
 #define DEBUG 0
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 //---------------------------------------------------------
 
 /* Partition that contains the file system. */
@@ -57,13 +58,13 @@ filesys_done (void)
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *name, off_t initial_size) 
+filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = dir_open_root (); // thread current, with null check
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, 0)
+                  && inode_create (inode_sector, initial_size, is_dir)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);

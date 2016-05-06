@@ -6,6 +6,10 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
+//--------------------------------------------
+#define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
+//--------------------------------------------
+
 /* A directory. */
 struct dir 
   {
