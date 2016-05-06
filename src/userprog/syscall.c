@@ -447,37 +447,6 @@ int wait (pid_t pid)
 // returns: boolean representing success
 bool create (const char *file, unsigned initial_size)
 {
-/*  if (DEBUG)
-    printf ("file ptr: %p valid? %d\n",file, is_paged (file));
-  char** parsed_path = parse_path(file);
-  uint32_t arg_count = arg_array_count(parsed_path);
-  if(!arg_count)
-    exit(SYSCALL_ERROR);
-
-  //hex_dump(cp,cp,16,1);
-  //ASSERT(false);
-  //struct dir* new_dir = navigate_path(file);
-  
-  // check for valid file name in memory
-  if (file == NULL || !is_paged (file))
-    exit (SYSCALL_ERROR);
-  if (DEBUG)
-    printf ("sema-downing in create...   ");
-  // synchronize
-  sema_down (&filesys_sema);
-  if (DEBUG)
-    printf ("   ... success!\n");
-  bool created = filesys_create (file, initial_size, false);
-
-  if (DEBUG)
-    printf ("sema up-ing....   ");
-
-  sema_up (&filesys_sema);
-  if (DEBUG)
-    printf ("   ... success!\n");
-
-  return created;*/
-
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
@@ -488,6 +457,9 @@ bool create (const char *file, unsigned initial_size)
   struct dir* old_dir = curr_thread->cwd;
   struct inode* temp_inode;
   struct dir* temp_dir = old_dir;
+  if(is_absolute(file))
+   temp_dir = dir_open_root();
+
  // set new cwd
   uint32_t args = 0;
   if(parse_array)
@@ -842,12 +814,18 @@ bool is_user_and_mapped (void* addr)
 
 bool chdir (const char *dir)
 {
+  if (dir == NULL || !is_paged (dir))
+    exit (SYSCALL_ERROR);
+
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
  // old directory
   struct dir* old_dir = curr_thread->cwd;
   struct inode* temp_inode;
   struct dir* temp_dir = old_dir;
+  if(is_absolute(dir))
+   temp_dir = dir_open_root();
+
  // set new cwd
   uint32_t args = 0;
   if(parse_array)
@@ -863,12 +841,12 @@ bool chdir (const char *dir)
     {
       //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
       if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
-        DEBUGMSG("assballs in the house\n");
+        DEBUGMSG("chdir: dir_lookup FAILED\n");
         return false;
         
       }
     }
-    DEBUGMSG("FAAAAACK I NEED SLEEP\n");
+    DEBUGMSG("chdir: dir_lookup FAILED\n");
     temp_dir = dir_open(temp_inode);
     if(!temp_dir)
     {
@@ -883,12 +861,18 @@ bool chdir (const char *dir)
 
 bool mkdir (const char *dir)
 {
+  if (dir == NULL || !is_paged (dir))
+    exit (SYSCALL_ERROR);
+
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
  // old directory
   struct dir* old_dir = curr_thread->cwd;
   struct inode** temp_inode;
   struct dir* temp_dir = old_dir;
+  if(is_absolute(dir))
+   temp_dir = dir_open_root();
+
  // set new cwd
   uint32_t args = 0;
   if(parse_array)
@@ -928,6 +912,8 @@ bool mkdir (const char *dir)
 
 bool readdir (int fd, char *name)
 {
+  if (name == NULL || !is_paged (name))
+    exit (SYSCALL_ERROR);
   ASSERT(false);
   return false;
 }
@@ -936,10 +922,10 @@ bool isdir (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
   if(temp_file == NULL)
-    return false;
+    exit(SYSCALL_ERROR);
   struct inode *temp_inode = file_get_inode(temp_file);
   if(temp_inode == NULL)
-    return false;
+    exit(SYSCALL_ERROR);
   int result = inode_get_is_dir (temp_inode);
   return (bool) result;
 }
@@ -948,10 +934,10 @@ int inumber (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
   if(temp_file == NULL)
-    return false;
+    exit(SYSCALL_ERROR);
   struct inode *temp_inode = file_get_inode(temp_file);
   if(temp_inode == NULL)
-    return false;
+    exit(SYSCALL_ERROR);
   block_sector_t result = inode_get_inumber(temp_inode);
   return (int) result;
 }
