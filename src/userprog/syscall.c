@@ -33,6 +33,7 @@ int inumber (int fd);
 char** parse_path(const char* in);
 
 bool is_absolute(const char* path);
+struct dir* navigate_path(uint32_t args, char** parse_array, struct dir* temp_dir);
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
 #define DEBUG 0
@@ -877,34 +878,35 @@ bool mkdir (const char *dir)
   char** parse_array = parse_path(dir);
  // old directory
   struct dir* old_dir = curr_thread->cwd;
-  struct inode** temp_inode;
+  
+  //Checking if absolute or relative path
   struct dir* temp_dir = old_dir;
   if(is_absolute(dir))
    temp_dir = dir_open_root();
 
- // set new cwd
+ // Counts number of directories to transfer in path
   uint32_t args = 0;
   if(parse_array)
     args = arg_array_count(parse_array);
 
   if(args>1)
   {
-    DEBUGMSG("mkdir: In args>1 if statement\n");
-    uint32_t directory_count = args -1;
-    uint32_t i = 0;
-    for(i; i < directory_count; ++i)
-    {
-      DEBUGMSG("mkdir: In for loop\n");
-      if(!dir_lookup(temp_dir, parse_array[i], temp_inode))
-        return false;
-    }
+    // DEBUGMSG("mkdir: In args>1 if statement\n");
+    // uint32_t directory_count = args -1;
+    // uint32_t i = 0;
+    // for(i; i < directory_count; ++i)
+    // {
+    //   DEBUGMSG("mkdir: In for loop\n");
+    //   if(!dir_lookup(temp_dir, parse_array[i], temp_inode))
+    //     return false;
+    // }
 
-    temp_dir = dir_open(*temp_inode);
-    if(!temp_dir)
-    {
-      return false;
-    }
-    curr_thread->cwd = temp_dir;
+    // temp_dir = dir_open(*temp_inode);
+    // if(!temp_dir)
+    // {
+    //   return false;
+    // }
+    curr_thread->cwd = navigate_path( args, parse_array, temp_dir);
   }
   DEBUGMSG("Ali's a ho %p\n", curr_thread->cwd);
   if(!filesys_create(parse_array[args-1], 0, true)){
@@ -1021,27 +1023,6 @@ char** parse_path(const char* in)
   //return out;
 }
 
-// char* navigate_absolute(const char* path)
-// {
-//   char * parsed_path = parse_path(path);
-//   struct dir *dir = dir_open_root ();
-//   struct inode  ** inode_pp;
-  
-//   dir_lookup (dir, parsed_path, inode_pp);
-  
-//   int index = 0;
-//   while( *inode_pp &&  )//null on failure
-//   {
-
-//   }
-//   return;
-// }
-// char* navigate_relative(const char* path)
-// {
-  
-//   char * parsed_path = parse_path(path);
-// }
-
 uint32_t arg_array_count(char** aa)
 {
   DEBUGMSG("!!!!!!!!!\n");
@@ -1058,4 +1039,27 @@ uint32_t arg_array_count(char** aa)
 bool is_absolute(const char* path)
 {
   return path[0] == '/';
+}
+
+// pass in args, temp_dir, char** parse_array 
+struct dir* navigate_path(uint32_t args, char** parse_array, struct dir* temp_dir)
+{
+  struct inode** temp_inode;
+  uint32_t directory_count = args -1;
+  uint32_t i = 0;
+  for(i; i < directory_count; ++i)
+  {
+    //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
+    if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
+      DEBUGMSG("create: assballs in the house\n");
+      return NULL;
+    }
+  }
+  DEBUGMSG("create: FAAAAACK I NEED SLEEP\n");
+  temp_dir = dir_open(temp_inode);
+  if(!temp_dir)
+  {
+    return NULL;
+  }
+  return temp_dir;
 }
