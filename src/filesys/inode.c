@@ -16,7 +16,7 @@
 //-------------------------------------------------------
 //#define DEBUG 1
 
-#define ENTRIES 128       /* Maximum number of entries in 512 bytes */
+#define ENTRIES 128       /* Number of entries in an indirection table */
 #define DIRECT_PTRS 123     /* Number of direct pointers within inode_disk */
 #define ERROR_CODE -1
 #define MAX_DATA_SECTORS 16384  /* 8MB divided by 512bytes */
