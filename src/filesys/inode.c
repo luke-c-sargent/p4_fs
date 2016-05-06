@@ -16,11 +16,10 @@
 //-------------------------------------------------------
 //#define DEBUG 1
 
-#define ENTRIES 128 //sqrt of number of blocks needed
-#define HALF_ENTRY 64
-#define DIRECT_PTRS 123     //Ali: changed from 124 to 123
+#define ENTRIES 128       /* Maximum number of entries in 512 bytes */
+#define DIRECT_PTRS 123     /* Number of direct pointers within inode_disk */
 #define ERROR_CODE -1
-#define MAX_DATA_SECTORS 16384// 8MB
+#define MAX_DATA_SECTORS 16384  /* 8MB divided by 512bytes */
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 
 
@@ -31,29 +30,25 @@ static uint32_t DEBUG = 0;
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
 {
-    //block_sector_t start;               /* First data sector. */
+
     off_t length;                         /* File size in bytes. */
     unsigned magic;                       /* Magic number. */
-    int is_dir;                          /* If true, file is directory */      //Ali: is this struct equal to 512 bytes?
+    int is_dir;                          /* If true, file is directory */
 
-    block_sector_t  direct[DIRECT_PTRS];  // 123 direct pointers
-    // will equal block sector size bytes 
+    block_sector_t  direct[DIRECT_PTRS];    /* Holds 123 sectors that act as direct pointers data blocks */ 
     block_sector_t single_indirection;      /* sector where single indirection block lives */
     block_sector_t dbl_indirection;         /* sector where double indirection block lives */
-    //total number of direct pointers will be entries*entries
 };
 
   //------------------------------------------------------
 struct indirect
 {
-    // will equal block sector size bytes
-  block_sector_t indices[ENTRIES];
+  block_sector_t indices[ENTRIES];     /* Holds 128 block_sector_t indices that act as direct pointers to data blocks */
 };
 
 struct dbl_indirect
 {
-  // will equal block sector size bytes
-  block_sector_t indices[ENTRIES]; 
+  block_sector_t indices[ENTRIES];     /* Holds 128 block_sector_t indices to where singly indirect tables live */
 };
 // FN DECLARATIONS
 //-----------------------------------------------------------------
