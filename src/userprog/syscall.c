@@ -14,6 +14,7 @@
 
 
 #define SYSCALL_ERROR -1
+#define DEBUG 0
 
 struct filesys_sema;
 
@@ -36,7 +37,6 @@ bool is_absolute(const char* path);
 block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t temp_dir);
 //-----------------------------------------------
 static void syscall_handler (struct intr_frame *);
-#define DEBUG 0
 #define DEBUGMSG(...) if(DEBUG){printf(__VA_ARGS__);}
 
 void
@@ -553,8 +553,44 @@ int open (const char *file)
     sema_up (&filesys_sema);
     return SYSCALL_ERROR;
   }
+  //--------------------------------------------------
+  struct thread* curr_thread = thread_current();
+  struct file* opened_file = 0;
+ // old directory
+  //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
+  block_sector_t old_cwd_i = curr_thread->cwd_i;
+  DEBUGMSG("OPEN CWD_I: %d\n", old_cwd_i);
+  //struct dir* temp_dir = old_dir;
+  if(is_absolute(file))
+   curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
-  struct file* opened_file = filesys_open (file);
+ // set new cwd
+  char** parse_array = parse_path(file);
+  uint32_t args = 0;
+  if(parse_array)
+    args = arg_array_count(parse_array);
+
+  if(args>1)
+  {
+    {
+      curr_thread->cwd_i =  navigate_path( args, parse_array, curr_thread->cwd_i);
+      DEBUGMSG("OPEN NEW CWD %d\n", curr_thread->cwd_i);
+    }
+    DEBUGMSG("OPEN FILE %s at sector %d \n", parse_array[args-1], curr_thread->cwd_i);
+    opened_file = filesys_open(parse_array[args-1]);
+    if(!opened_file){
+      DEBUGMSG("create filesys_create failed\n");
+      curr_thread->cwd_i = old_cwd_i;
+      free_parse_path(parse_array);
+      return false;
+    }
+    curr_thread->cwd_i = old_cwd_i;
+    free_parse_path(parse_array);
+  }
+  else
+    opened_file = filesys_open (file);
+
+  //--------------------------------------------------
 
   if (opened_file == NULL)
   {
@@ -675,6 +711,8 @@ int write (int fd, const void *buffer, unsigned size)
   }
   else 
   {
+    if(isdir (fd))
+      return SYSCALL_ERROR;
     // atomically access file system
     if (DEBUG)
     printf ("file descriptor %d\n", fd);
@@ -695,6 +733,8 @@ int write (int fd, const void *buffer, unsigned size)
     sema_up (&filesys_sema);
     if (DEBUG)
       printf ("returning %d written bytes\n", written);
+    // if(!written)
+    //   return SYSCALL_ERROR;
     return written;
   }
 }
