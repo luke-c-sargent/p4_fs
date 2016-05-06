@@ -448,12 +448,12 @@ int wait (pid_t pid)
 // returns: boolean representing success
 bool create (const char *file, unsigned initial_size)
 {
-  if(!(*file))
-    return false;
-
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
+
+  if(!(*file))
+    return false;
 
   struct thread* curr_thread = thread_current();
   
@@ -805,11 +805,11 @@ bool is_user_and_mapped (void* addr)
 
 bool chdir (const char *dir)
 {
-  if(!(*dir))
-    return false;
-
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
+
+  if(!(*dir))
+    return false;
 
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
@@ -845,11 +845,11 @@ bool chdir (const char *dir)
 
 bool mkdir (const char *dir)
 {
-  if(!(*dir))
-    return false;
-
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
+
+  if(!(*dir))
+    return false;
 
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
