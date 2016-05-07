@@ -24,6 +24,6 @@ unsigned tell (int fd);
 void close (int fd);
 
 struct dir* sector_to_dir (block_sector_t in);
-block_sector_t dir_to_sector(struct dir* dir);
+block_sector_t dir_to_sector (struct dir* dir);
 
 #endif /* userprog/syscall.h */

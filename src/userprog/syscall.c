@@ -204,16 +204,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_WRITE: {
       if (DEBUG)
-          printf ("SYS_WRITE signal\n");
+        printf ("SYS_WRITE signal\n");
       arg_error_check (f->esp,3);
       int fd = *(int*)(f->esp+4);
       char ** cp = (char*)(f->esp+8);
       if (!is_user_and_mapped(*cp))
       {
-          if (DEBUG)
-            printf ("\n");
-          f->eax = SYSCALL_ERROR;
-          exit (SYSCALL_ERROR);
+        if (DEBUG)
+          printf ("\n");
+        f->eax = SYSCALL_ERROR;
+        exit (SYSCALL_ERROR);
       }
 
       int char_count = *(int*)(f->esp+12);
@@ -235,7 +235,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       if (DEBUG)
         printf ("SYS_TELL signal\n");
       arg_error_check (f->esp,1);
-      f->eax = tell(*(int*)(f->esp+4));
+      f->eax = tell (*(int*)(f->esp+4));
       break;
     }
     case SYS_CLOSE:
@@ -356,27 +356,6 @@ pid_t exec (const char *cmd_line)
 {
   if(!is_user_and_mapped(cmd_line))
     return SYSCALL_ERROR;
-/*
-  // hacky test, i dont like it:
-  // get file name
-  char filename[15]; // max filename size
-  int i = 0;
-  while(cmd_line[i] != ' '){
-    filename[i] = cmd_line[i];
-    ++i;
-    if(i==14)
-      break;
-  }
-  filename[i]= 0;
-  //printf("---%s\n", filename);
-  if(open(filename) != SYSCALL_ERROR)
-    printf("");//close(cmd_line); // doesntwork yet :C
-  else{
-    if(DEBUG)
-      printf("%s ERROR!!!!!",cmd_line);
-    return SYSCALL_ERROR;
-  }
-  // end hacky test*/
 
   if (DEBUG)
   {
@@ -396,9 +375,6 @@ pid_t exec (const char *cmd_line)
     printf ("EXEC: pid is %d, exit status %d\n", pid, child_thread_ptr->exit_status);
   }
   
-
-  //if(DEBUG)
-    //printf("EXEC: %s exit status: %d \n", child_thread_ptr->child_pointer->parent->name, child_thread_ptr->exit_status);
   if(child_thread_ptr->exit_status == SYSCALL_ERROR)
     return SYSCALL_ERROR;
   //wait(pid);
@@ -413,32 +389,7 @@ int wait (pid_t pid)
 {
   if (DEBUG)
     printf ("wait called on PID %d\n", pid);
-  // fail cases:
-  // -- pid not child:
-  // struct thread* child_ptr = get_child_by_tid(pid);
 
-  // if(child_ptr == NULL){
-  //   if(DEBUG)
-  //     printf("child pointer is bad\n");
-  //   return SYSCALL_ERROR;    
-  // }
-
-  // if(DEBUG)
-  //   printf("thread %p: %s gotten\n", child_ptr, child_ptr->name);
-
-  // struct thread_child* thread_cp = get_child_struct_by_child(child_ptr);
-
-   /* 
-  // is already waiting
-  printf("OHNOES!!!!!!!!!    %p\n", thread_cp);
-  if(thread_cp->parent_waiting != 0){
-    if(DEBUG)
-      printf("already waiting\n");
-    return SYSCALL_ERROR;
-  }*/
-
-  // sema down -----
-  //sema_down(&thread_current ()-> sema);
   return process_wait (pid);
 }
 // create:
@@ -523,10 +474,9 @@ bool remove (const char *file)
   struct thread* curr_thread = thread_current();
   
  // old directory
-  //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
   block_sector_t old_cwd_i = curr_thread->cwd_i;
   DEBUGMSG("REMOVE CWD_I: %d\n", old_cwd_i);
-  //struct dir* temp_dir = old_dir;
+
   if(is_absolute(file))
    curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
@@ -538,20 +488,20 @@ bool remove (const char *file)
 
   if(args>1)
   {
-    {
-      curr_thread->cwd_i =  navigate_path( args, parse_array, curr_thread->cwd_i);
-      DEBUGMSG("REMOVE NEW CWD %d\n", curr_thread->cwd_i);
-    }
+    
+    curr_thread->cwd_i =  navigate_path( args, parse_array, curr_thread->cwd_i);
+    DEBUGMSG("REMOVE NEW CWD %d\n", curr_thread->cwd_i);
+    
     DEBUGMSG("REMOVING FILE %s at sector %d \n", parse_array[args-1], curr_thread->cwd_i);
     if(!filesys_remove(parse_array[args-1]))
     {
       DEBUGMSG("remove filesys_create failed\n");
       curr_thread->cwd_i = old_cwd_i;
-      free_parse_path(parse_array);
+      free_parse_path (parse_array);
       return false;
     }
     curr_thread->cwd_i = old_cwd_i;
-    free_parse_path(parse_array);
+    free_parse_path (parse_array);
     return true;
   }
   // ------------------------------------------------------
@@ -594,10 +544,9 @@ int open (const char *file)
   struct thread* curr_thread = thread_current();
   struct file* opened_file = 0;
  // old directory
-  //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
   block_sector_t old_cwd_i = curr_thread->cwd_i;
   DEBUGMSG("OPEN CWD_I: %d\n", old_cwd_i);
-  //struct dir* temp_dir = old_dir;
+
   if(is_absolute(file))
    curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
@@ -925,7 +874,11 @@ bool chdir (const char *dir)
   free_parse_path(parse_array);
   return false;
 }
-
+/* mkdir
+  what it does: makes a directory
+  what it takes: the name of the directory with path
+  what it returns: boolean representing success
+*/
 bool mkdir (const char *dir)
 {
 
@@ -935,13 +888,12 @@ bool mkdir (const char *dir)
   if(!(*dir))
     return false;
 
-  struct thread* curr_thread = thread_current();
-  char** parse_array = parse_path(dir);
+  struct thread* curr_thread = thread_current ();
+  char** parse_array = parse_path (dir);
  // old directory
   block_sector_t old_cwd_i = curr_thread->cwd_i;
   DEBUGMSG("MKDIR CWD: %d\n", old_cwd_i);
   //Checking if absolute or relative path
-  //struct dir* temp_dir = old_dir;
   if(is_absolute(dir))
    curr_thread->cwd_i = ROOT_DIR_SECTOR;
 
@@ -955,28 +907,40 @@ bool mkdir (const char *dir)
     curr_thread->cwd_i = navigate_path( args, parse_array, curr_thread->cwd_i);
     DEBUGMSG("MKDIR NEW CWD: %d\n", curr_thread->cwd_i);
   }
-  if(!filesys_create(parse_array[args-1], 0, true)){
+  if(!filesys_create(parse_array[args-1], 0, true))
+  {
     DEBUGMSG("mkdir filesys_create failed\n");
     curr_thread->cwd_i = old_cwd_i;
-    free_parse_path(parse_array);
+    free_parse_path (parse_array);
     return false;
   }
   if(old_cwd_i)
     curr_thread->cwd_i = old_cwd_i;
-  free_parse_path(parse_array);
+  free_parse_path (parse_array);
   return true;
 }
-
+/* readdir
+  what it does: Reads a directory entry from file descriptor fd, which must represent 
+    a directory. If successful, stores the null-terminated file name in name, which must 
+    have room for READDIR_MAX_LEN + 1 bytes, and returns true. If no entries are left in 
+    the directory, returns false.
+  what it takes: file descriptor, name buffer
+  what it returns: a bool that represents success
+*/
 bool readdir (int fd, char *name)
 {
   if (name == NULL || !is_paged (name))
     exit (SYSCALL_ERROR);
 
-
-  ASSERT(false);
+  ASSERT (false);
   return false;
 }
 
+/* isdir
+  what it does: checks if a file is a directory
+  what it takes: file descriptor
+  what it returns: a bool representing success
+*/
 bool isdir (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
@@ -989,6 +953,11 @@ bool isdir (int fd)
   return (bool) result;
 }
 
+/* inumber
+  what it does: gets an inode number from a file descriptor
+  what it takes: file descriptor
+  what it returns: a bool representing success
+*/
 int inumber (int fd)
 {
   struct file *temp_file = fd_to_file_ptr(fd);
@@ -1011,7 +980,8 @@ int inumber (int fd)
 char** parse_path(const char* in)
 { 
   
-  if(in[0]==NULL){
+  if(in[0]==NULL)
+  {
     DEBUGMSG("in[0] is null\n");
     return NULL;
   }
@@ -1031,17 +1001,14 @@ char** parse_path(const char* in)
     token = strtok_r (NULL, "/", &save_ptr))
   {
     length = strlen(token);
-    // if (DEBUG)
-    //   printf ("[%d]'%s@%p'\n", length, token, (out+length));
 
     strlcpy (out + indexer, token, length+1);
     ++arg_count;
     indexer += length + 1;
   }
   if(DEBUG){hex_dump(out,out,16,1);}
-  // FREEE MEEEEE
-  char** arg_array = (char**)calloc(1, sizeof(char*)*(arg_count+1)); // <-- free me
-  // FREEEEE MEEEEE
+
+  char** arg_array = (char**)calloc(1, sizeof(char*)*(arg_count+1)); 
   int i = 1;
   int index=0;
   arg_array[0] = out;
@@ -1049,7 +1016,8 @@ char** parse_path(const char* in)
   for( i; i < arg_count; ++i )
   {
     DEBUGMSG("i= %d\n",i);
-    while(out[index]!=NULL){
+    while(out[index]!=NULL)
+    {
       DEBUGMSG("index=%d\n",index);
       index++;
     }
@@ -1058,28 +1026,36 @@ char** parse_path(const char* in)
     arg_array[i]=&out[index];
     if(DEBUG){printf("!!!%s\n",arg_array[i]);}
   }
-  if(DEBUG){
+  if(DEBUG)
+  {
     i=0;
-    while(arg_array[i]){
+    while(arg_array[i])
+    {
       printf("aa[%d]=%s\n", i, arg_array[i]);
       ++i;
     }
-
   }
-  //ASSERT(false);
   return arg_array;
-  //return out;
 }
 
+/* free_parse_path
+what it does: frees allocated memory for argument parsing
+what it takes: parsed argument
+what it returns: nothing
+*/
 void free_parse_path(char** aa)
 {
   free(aa[0]);
   free(aa);
 }
 
+/* arg_array_count
+what it does: counts arguments
+what it takes: parsed argument
+what it returns: argument count
+*/
 uint32_t arg_array_count(char** aa)
 {
-  DEBUGMSG("!!!!!!!!!\n");
   uint32_t i=0;
   uint32_t count=0;
   while(aa[i]){
@@ -1090,17 +1066,29 @@ uint32_t arg_array_count(char** aa)
   return count;
 }
 
-bool is_absolute(const char* path)
+/* is_absolute
+what it does: checks if path is absolute
+what it takes: a path
+what it returns: boolean representing absolute path or not
+*/
+bool 
+is_absolute(const char* path)
 {
   return path[0] == '/';
 }
 
-// pass in args, temp_dir, char** parse_array 
-block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t dir_sector)
+/* navigate_path
+what it does: navigates a parsed path
+what it takes: number of arguments, parsed array, and sector to start navigation from
+what it returns: block sector where the requested directory lives
+*/
+block_sector_t 
+navigate_path(uint32_t args, char** parse_array, block_sector_t dir_sector)
 {
   int idx=0;
-  while(parse_array[idx]){
-    DEBUGMSG("ARGS: %s\n", parse_array[idx]);
+  while(parse_array[idx])
+  {
+    DEBUGMSG ("ARGS: %s\n", parse_array[idx]);
     ++idx;
   }
   DEBUGMSG("~~~~~~~~~~~~~~~~~~~~~~~~\nNAVIGATE: from %d ", dir_sector);
@@ -1110,11 +1098,12 @@ block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t d
   struct dir* temp_dir = sector_to_dir(dir_sector);
   for(i; i < directory_count; ++i)
   {
-    //DEBUGMSG("looking up (%p, %s, %p)\n", temp_dir, parse_array[i], &temp_inode);
-    if(!dir_lookup(temp_dir, parse_array[i], &temp_inode)){
+
+    if(!dir_lookup(temp_dir, parse_array[i], &temp_inode))
+    {
       return NULL;
     }
-    temp_dir = dir_open(temp_inode);
+    temp_dir = dir_open (temp_inode);
     DEBUGMSG("to %d ", dir_to_sector(temp_dir));
   }
   DEBUGMSG("\n");
@@ -1125,11 +1114,21 @@ block_sector_t navigate_path(uint32_t args, char** parse_array, block_sector_t d
   return dir_to_sector(temp_dir);
 }
 
+/* sector_to_dir
+what it does: translates a sector number to a directory pointer
+what it takes: a sector number
+what it returns: a directory pointer
+*/
 struct dir* sector_to_dir(block_sector_t in)
 {
   return dir_open(inode_open(in));
 }
 
+/* dir_to_sector
+what it does: translates a directory pointer to a a sector number
+what it takes: a directory pointer
+what it returns: a sector number
+*/
 block_sector_t dir_to_sector(struct dir* dir)
 {
   return inode_get_inumber(dir_get_inode(dir));
