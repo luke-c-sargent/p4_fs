@@ -113,9 +113,8 @@ struct thread
     struct semaphore load_sema;
 
     struct list_elem* child_list_elem; // this is stupid
-
-    //struct dir* cwd;        /* Current Working Directory */
-    block_sector_t cwd_i;
+       
+    block_sector_t cwd_i;     /* Current Working Directory */
     //------------------------------------------------------------
 
     /* Owned by thread.c. */
