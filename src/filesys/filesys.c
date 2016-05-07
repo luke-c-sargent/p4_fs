@@ -62,7 +62,7 @@ bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = sector_to_dir(thread_current()->cwd_i); // thread current, with null check
+  struct dir *dir = sector_to_dir (thread_current()->cwd_i); // thread current, with null check
 
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
@@ -70,8 +70,8 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  dir_close (dir); // may need to comment this out <-------------------------------
-  // DEBUGMSG("n")
+  dir_close (dir);
+
   return success;
 }
 
@@ -83,7 +83,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = sector_to_dir(thread_current()->cwd_i);
+  struct dir *dir = sector_to_dir (thread_current()->cwd_i);
   struct inode *inode = NULL;
 
   if (dir != NULL)
@@ -100,7 +100,7 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = sector_to_dir(thread_current()->cwd_i);
+  struct dir *dir = sector_to_dir (thread_current()->cwd_i);
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
 
