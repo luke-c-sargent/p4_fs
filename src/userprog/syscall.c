@@ -354,6 +354,7 @@ void exit (int status)
 // returns: pid of executed process
 pid_t exec (const char *cmd_line)
 {
+  DEBUGMSG("EXEC\n");
   if(!is_user_and_mapped(cmd_line))
     return SYSCALL_ERROR;
 
@@ -399,17 +400,17 @@ int wait (pid_t pid)
 // returns: boolean representing success
 bool create (const char *file, unsigned initial_size)
 {
-
+  DEBUGMSG("CREATE\n");
   // check for valid file name in memory
   if (file == NULL || !is_paged (file))
     exit (SYSCALL_ERROR);
 
   if(!(*file))
     return false;
-
+  sema_down (&filesys_sema);
   struct thread* curr_thread = thread_current();
   
- // old directory
+  // old directory
   //struct dir* old_dir = sector_to_dir(curr_thread->cwd_i);
   block_sector_t old_cwd_i = curr_thread->cwd_i;
   DEBUGMSG("CREATE CWD_I: %d\n", old_cwd_i);
@@ -433,10 +434,12 @@ bool create (const char *file, unsigned initial_size)
     if(!filesys_create(parse_array[args-1], initial_size, false)){
       DEBUGMSG("create filesys_create failed\n");
       curr_thread->cwd_i = old_cwd_i;
+      sema_up (&filesys_sema);
       free_parse_path(parse_array);
       return false;
     }
     curr_thread->cwd_i = old_cwd_i;
+    sema_up (&filesys_sema);
     free_parse_path(parse_array);
     return true;
   }
@@ -447,7 +450,7 @@ bool create (const char *file, unsigned initial_size)
     if (DEBUG)
       printf ("sema-downing in create...   ");
     // synchronize
-    sema_down (&filesys_sema);
+    // sema_down (&filesys_sema);
     if (DEBUG)
       printf ("   ... success!\n");
     bool created = filesys_create (file, initial_size, false);
@@ -469,7 +472,8 @@ bool create (const char *file, unsigned initial_size)
 // returns: boolean representing success
 bool remove (const char *file)
 {
-
+  DEBUGMSG("REMOVE\n");
+  sema_down (&filesys_sema);
   // -----------------------------------------------------
   struct thread* curr_thread = thread_current();
   
@@ -497,10 +501,12 @@ bool remove (const char *file)
     {
       DEBUGMSG("remove filesys_create failed\n");
       curr_thread->cwd_i = old_cwd_i;
+      sema_up (&filesys_sema);
       free_parse_path (parse_array);
       return false;
     }
     curr_thread->cwd_i = old_cwd_i;
+    sema_up (&filesys_sema);
     free_parse_path (parse_array);
     return true;
   }
@@ -508,7 +514,7 @@ bool remove (const char *file)
   //else
   if (DEBUG)
     printf ("sema-downing in remove...   ");
-  sema_down (&filesys_sema);
+  // sema_down (&filesys_sema);
   if (DEBUG)
     printf ("   ... success!\n");
   // invoke file system kernel functions
@@ -567,6 +573,7 @@ int open (const char *file)
     if(!opened_file){
       DEBUGMSG("create filesys_create failed\n");
       curr_thread->cwd_i = old_cwd_i;
+      sema_up (&filesys_sema);
       free_parse_path(parse_array);
       return false;
     }
@@ -688,6 +695,7 @@ int read (int fd, void *buffer, unsigned length)
 // returns: bytes written
 int write (int fd, const void *buffer, unsigned size)
 {
+  DEBUGMSG("WRITE\n");
   if (fd == STDOUT_FILENO)
   {
     if (DEBUG)
@@ -732,7 +740,8 @@ int write (int fd, const void *buffer, unsigned size)
 // returns: void
 void seek (int fd, unsigned position)
 {
-	struct file* file_ptr = fd_to_file_ptr (fd);
+	DEBUGMSG("SEEK\n");
+  struct file* file_ptr = fd_to_file_ptr (fd);
 
 	if (file_ptr == NULL)
 	  exit(SYSCALL_ERROR);
@@ -746,6 +755,7 @@ void seek (int fd, unsigned position)
 // returns: position of next byte
 unsigned tell (int fd)
 {
+  DEBUGMSG("TELL\n");
 	struct file* file_ptr = fd_to_file_ptr (fd);
 
 	if (file_ptr == NULL)
@@ -761,6 +771,7 @@ unsigned tell (int fd)
 // returns: void
 void close (int fd)
 {
+  DEBUGMSG("CLOSE\n");
 	// unimplemented
     //ASSERT(false); // to speed up failure
   file_close(fd_to_file_ptr(fd));
@@ -835,13 +846,13 @@ bool is_user_and_mapped (void* addr)
 
 bool chdir (const char *dir)
 {
-
+  DEBUGMSG("CHDIR\n");
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
 
   if(!(*dir))
     return false;
-  
+  sema_down (&filesys_sema);
   struct thread* curr_thread = thread_current();
   char** parse_array = parse_path(dir);
  // old directory
@@ -865,12 +876,15 @@ bool chdir (const char *dir)
     if(curr_thread->cwd_i == NULL)
     {
       curr_thread->cwd_i = old_cwd_i;
+      sema_up (&filesys_sema);
       free_parse_path(parse_array);
       return false;
     }
+    sema_up (&filesys_sema);
     free_parse_path(parse_array);
     return true;
   }
+  sema_up (&filesys_sema);
   free_parse_path(parse_array);
   return false;
 }
@@ -881,13 +895,13 @@ bool chdir (const char *dir)
 */
 bool mkdir (const char *dir)
 {
-
+  DEBUGMSG("MKDIR\n");
   if (dir == NULL || !is_paged (dir))
     exit (SYSCALL_ERROR);
 
   if(!(*dir))
     return false;
-
+  sema_down (&filesys_sema);
   struct thread* curr_thread = thread_current ();
   char** parse_array = parse_path (dir);
  // old directory
@@ -911,11 +925,13 @@ bool mkdir (const char *dir)
   {
     DEBUGMSG("mkdir filesys_create failed\n");
     curr_thread->cwd_i = old_cwd_i;
+    sema_up (&filesys_sema);
     free_parse_path (parse_array);
     return false;
   }
   if(old_cwd_i)
     curr_thread->cwd_i = old_cwd_i;
+  sema_up (&filesys_sema);
   free_parse_path (parse_array);
   return true;
 }
@@ -929,6 +945,7 @@ bool mkdir (const char *dir)
 */
 bool readdir (int fd, char *name)
 {
+  DEBUGMSG("READDIR\n");
   if (name == NULL || !is_paged (name))
     exit (SYSCALL_ERROR);
 
@@ -943,13 +960,19 @@ bool readdir (int fd, char *name)
 */
 bool isdir (int fd)
 {
+  sema_down (&filesys_sema);
   struct file *temp_file = fd_to_file_ptr(fd);
-  if(temp_file == NULL)
+  if(temp_file == NULL){
+    sema_up (&filesys_sema);
     exit(SYSCALL_ERROR);
+  }
   struct inode *temp_inode = file_get_inode(temp_file);
-  if(temp_inode == NULL)
+  if(temp_inode == NULL){
+    sema_up (&filesys_sema);
     exit(SYSCALL_ERROR);
+  }
   int result = inode_get_is_dir (temp_inode);
+  sema_up (&filesys_sema);
   return (bool) result;
 }
 
@@ -960,13 +983,23 @@ bool isdir (int fd)
 */
 int inumber (int fd)
 {
+  sema_down (&filesys_sema);
+  DEBUGMSG("1\n");
   struct file *temp_file = fd_to_file_ptr(fd);
-  if(temp_file == NULL)
+  
+  if(temp_file == NULL) {
+    sema_up (&filesys_sema);
     exit(SYSCALL_ERROR);
+  }
+  DEBUGMSG("2\n");
   struct inode *temp_inode = file_get_inode(temp_file);
-  if(temp_inode == NULL)
+  if(temp_inode == NULL){
+    sema_up (&filesys_sema);
     exit(SYSCALL_ERROR);
+  }
+  DEBUGMSG("3\n");
   block_sector_t result = inode_get_inumber(temp_inode);
+  sema_up (&filesys_sema);
   return (int) result;
 }
 
